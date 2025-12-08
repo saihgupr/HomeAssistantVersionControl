@@ -1,0 +1,25 @@
+services:
+  ha-version-control:
+    # Note: Ensure a Docker image has been published via GitHub Actions first
+    # Or build locally with: docker build -t ghcr.io/saihgupr/home-assistant-version-control:latest ./homeassistant-version-control
+    image: ghcr.io/saihgupr/home-assistant-version-control:latest
+    container_name: ha-version-control
+    ports:
+      - "54001:54001"
+    environment:
+      # Set your timezone
+      - TZ=America/New_York
+      
+      # Optional: Add your Home Assistant Supervisor token to enable HA API features
+      # This allows the addon to restart HA and reload automations/scripts after restore
+      - SUPERVISOR_TOKEN=your_long_lived_access_token_here
+      
+      # Optional: Home Assistant URL (required for Docker mode to enable reload/restart features)
+      # Format: http://homeassistant.local:8123 or http://192.168.1.100:8123
+      - HA_URL=http://homeassistant.local:8123
+    volumes:
+      # Mount your Home Assistant config directory
+      # This directory will be tracked for changes
+      - /path/to/your/ha/config:/config
+    restart: unless-stopped
+

@@ -1,0 +1,45 @@
+{
+  "name": "home-assistant-version-control",
+  "version": "1.0.0",
+  "description": "Home Assistant Version Control - Git-powered time travel for your HA config",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "echo \"No tests specified\" && exit 0",
+    "lint": "echo \"No linter specified\" && exit 0"
+  },
+  "keywords": [
+    "home-assistant",
+    "addon",
+    "version-control",
+    "git",
+    "time-machine",
+    "backup",
+    "automation"
+  ],
+  "author": "Your Name <your.email@example.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/saihgupr/home-assistant-version-control#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/saihgupr/home-assistant-version-control.git"
+  },
+  "bugs": {
+    "url": "https://github.com/saihgupr/home-assistant-version-control/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "chokidar": "^3.5.3",
+    "express": "^4.18.2",
+    "js-yaml": "^4.1.0"
+  },
+  "ha-addon": {
+    "name": "Home Assistant Version Control",
+    "slug": "home-assistant-version-control",
+    "url": "https://github.com/saihgupr/home-assistant-version-control"
+  }
+}

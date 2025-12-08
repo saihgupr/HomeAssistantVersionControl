@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Home Assistant Version Control</title>
+  <script src="js/diff.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+  <link rel="stylesheet" href="css/style.css?v=${new Date().getTime()}">
+  <link rel="icon" type="image/x-icon" href="images/favicon.ico">
+</head>
+
+<body class="dark-mode">
+  <!-- Snow Container for Holiday Mode -->
+  <div id="snowContainer" class="snow-container"></div>
+  <div class="container">
+    <div class="header">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <img src="images/icon.png" alt="Logo" style="width: 48px; height: 48px; border-radius: 6px;">
+        <div style="margin-top: -4px;">
+          <div class="title" data-i18n="app.title">Home Assistant Version Control</div>
+          <div style="color: var(--text-tertiary); font-size: 14px; margin-top: -12px;" data-i18n="app.subtitle">Browse
+            and restore backups—like magic.</div>
+        </div>
+      </div>
+      <button class="btn-subtle" onclick="openSettings()" data-i18n="app.settings">Settings</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchMode('timeline')" id="timelineTab"
+        data-i18n="tabs.history">History</button>
+      <button class="tab" onclick="switchMode('files')" id="filesTab" data-i18n="tabs.files">Files</button>
+      <button class="tab" onclick="switchMode('automations')" id="automationsTab"
+        data-i18n="tabs.automations">Automations</button>
+      <button class="tab" onclick="switchMode('scripts')" id="scriptsTab" data-i18n="tabs.scripts">Scripts</button>
+    </div>
+
+    <div class="content">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-header-top">
+            <div class="panel-header-info">
+              <h2 id="leftPanelTitle" data-i18n="timeline.title">Timeline</h2>
+            </div>
+            <div class="panel-header-actions" id="leftPanelActions" style="display: none;">
+              <select id="sortSelect" class="sort-select" onchange="handleSortChange(this.value)">
+                <option value="default" data-i18n="sort.default">Default</option>
+                <option value="name_asc" data-i18n="sort.name_asc">Name (A-Z)</option>
+                <option value="name_desc" data-i18n="sort.name_desc">Name (Z-A)</option>
+                <option value="recently_modified" data-i18n="sort.recently_modified">Recently Modified</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="panel-content">
+          <div class="search-container" id="timelineSearch">
+            <input type="text" class="search-input" placeholder="Search versions by message..."
+              oninput="handleSearch(event)" id="searchInput" data-i18n="timeline.search_placeholder">
+            <button class="search-clear" onclick="clearSearch()" id="clearBtn" style="display: none;">×</button>
+            <div class="search-info" id="searchInfo"></div>
+          </div>
+          <div id="leftPanel" class="custom-scrollbar">
+            <div class="empty" data-i18n="app.loading">Loading...</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-header-top">
+            <div class="panel-header-info">
+              <h2 id="rightPanelTitle" data-i18n="timeline.files_in_commit">Files in Commit</h2>
+              <p id="itemsSubtitle"></p>
+            </div>
+            <div class="panel-header-actions" id="rightPanelActions">
+              <!-- Restore button will appear here when needed -->
+            </div>
+          </div>
+        </div>
+        <div id="rightPanel" class="panel-content custom-scrollbar">
+          <div class="empty" data-i18n="timeline.select_commit">Select a commit to see files</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="diffModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="modalTitle" data-i18n="diff.title">File Diff</div>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-content">
+        <div class="commit-info" id="commitInfo" data-i18n="app.loading">
+          Loading...
+        </div>
+        <div class="diff-container">
+          <div class="diff-panel">
+            <div class="diff-header" data-i18n="diff.current_version">Current Version</div>
+            <div class="diff-content custom-scrollbar" id="currentContent"></div>
+          </div>
+          <div class="diff-panel">
+            <div class="diff-header" data-i18n="diff.backup_version">Backup Version</div>
+            <div class="diff-content custom-scrollbar" id="backupContent"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal()" data-i18n="app.cancel">Cancel</button>
+        <button class="btn restore" id="restoreBtn" onclick="confirmRestore()"
+          data-i18n="diff.restore_this_file">Restore This File</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Restore Preview Modal -->
+  <div class="modal-overlay" id="restorePreviewModal">
+    <div class="modal" style="max-width: 900px;">
+      <div class="modal-header">
+        <div class="modal-title" id="restorePreviewTitle" data-i18n="restore_preview.title">Preview Restore</div>
+        <button class="modal-close" onclick="closeRestorePreview()">&times;</button>
+      </div>
+      <div class="modal-content">
+        <div class="commit-info" id="restorePreviewInfo" data-i18n="restore_preview.loading_preview">
+          Loading preview...
+        </div>
+        <div class="diff-content custom-scrollbar" id="restoreDiffContent"
+          style="max-height: 60vh; overflow-y: auto; background: #1a1a1a; border-radius: 6px; padding: 16px; margin-top: 16px;">
+          <div class="empty" data-i18n="diff.loading_diff">Loading diff...</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeRestorePreview()" data-i18n="app.cancel">Cancel</button>
+        <button class="btn restore" id="confirmRestoreBtn" onclick="doRestore()"
+          data-i18n="restore_preview.confirm_restore">Confirm Restore</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal settings-modal" style="max-width: 430px;">
+      <div class="modal-header">
+        <div class="modal-title" data-i18n="app.settings">Settings</div>
+        <button class="modal-close" onclick="closeSettings()">&times;</button>
+      </div>
+      <div class="modal-content">
+        <div class="settings-section">
+
+          <!-- Group 2: General -->
+          <div class="settings-group">
+            <div class="settings-group-title" data-i18n="settings.group_general">General</div>
+
+            <div id="debounceTimeOptions" style="margin-bottom: 20px;">
+              <label style="display: block; margin-bottom: 8px;">
+                <span style="color: var(--text-primary); font-size: 14px;" data-i18n="settings.debounce_time">Debounce
+                  Time</span>
+              </label>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                <div class="custom-number-input-wrapper" style="position: relative;">
+                  <input type="number" id="debounceTime" min="0" value="1" style="
+                    width: 100%;
+                    padding: 10px 32px 10px 12px;
+                    background: var(--bg-tertiary);
+                    border: 1px solid var(--border-subtle);
+                    border-radius: var(--radius-md);
+                    color: var(--text-primary);
+                    font-size: 14px;
+                    -moz-appearance: textfield;
+                    appearance: textfield;
+                  ">
+                  <div class="custom-spinners"
+                    style="position: absolute; right: 2px; top: 2px; bottom: 2px; display: flex; flex-direction: column; width: 24px;">
+                    <button class="spinner-btn spinner-up" onclick="stepInput('debounceTime', 1)"
+                      style="flex: 1; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                        stroke="#9ca3af" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"
+                        style="transform: rotate(180deg);">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </button>
+                    <button class="spinner-btn spinner-down" onclick="stepInput('debounceTime', -1)"
+                      style="flex: 1; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                        stroke="#9ca3af" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <select id="debounceTimeUnit" style="
+                  width: 100%;
+                  padding: 10px 12px;
+                  background: var(--bg-tertiary);
+                  border: 1px solid var(--border-subtle);
+                  border-radius: var(--radius-md);
+                  color: var(--text-primary);
+                  font-size: 14px;
+                  -webkit-appearance: none;
+                  appearance: none;
+                ">
+                  <option value="seconds" data-i18n="units.seconds">Seconds</option>
+                  <option value="minutes" data-i18n="units.minutes">Minutes</option>
+                  <option value="hours" data-i18n="units.hours">Hours</option>
+                  <option value="days" data-i18n="units.days">Days</option>
+                </select>
+              </div>
+              <p style="color: var(--text-secondary); font-size: 12px; margin-top: 6px; margin-left: 2px;"
+                data-i18n="settings.debounce_time_desc">
+                Time to wait before creating a version after file changes
+              </p>
+            </div>
+
+            <div class="setting-item" style="margin-bottom: 20px;">
+              <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                <span style="color: var(--text-primary); font-size: 14px;"
+                  data-i18n="settings.history_retention">History
+                  Retention</span>
+                <div class="toggle-switch">
+                  <input type="checkbox" id="historyRetention" style="display: none;" checked>
+                  <label for="historyRetention" class="toggle-slider" onclick="handleRetentionToggle()"></label>
+                </div>
+              </label>
+              <div id="retentionOptions" style="margin-top: 12px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                  <div class="custom-number-input-wrapper" style="position: relative;">
+                    <input type="number" id="retentionValue" min="1" value="30" style="
+                    width: 100%;
+                    padding: 10px 32px 10px 12px;
+                    background: var(--bg-tertiary);
+                    border: 1px solid var(--border-subtle);
+                    border-radius: var(--radius-md);
+                    color: var(--text-primary);
+                    font-size: 14px;
+                    -moz-appearance: textfield;
+                    appearance: textfield;
+                  ">
+                    <div class="custom-spinners"
+                      style="position: absolute; right: 2px; top: 2px; bottom: 2px; display: flex; flex-direction: column; width: 24px;">
+                      <button class="spinner-btn spinner-up" onclick="stepInput('retentionValue', 1)"
+                        style="flex: 1; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                          stroke="#9ca3af" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"
+                          style="transform: rotate(180deg);">
+                          <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                      </button>
+                      <button class="spinner-btn spinner-down" onclick="stepInput('retentionValue', -1)"
+                        style="flex: 1; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                          stroke="#9ca3af" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                          <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <select id="retentionUnit" style="
+                    width: 100%;
+                    padding: 10px 12px;
+                    background: var(--bg-tertiary);
+                    border: 1px solid var(--border-subtle);
+                    border-radius: var(--radius-md);
+                    color: var(--text-primary);
+                    font-size: 14px;
+                    -webkit-appearance: none;
+                    appearance: none;
+                  ">
+                    <option value="hours" data-i18n="units.hours">Hours</option>
+                    <option value="days" selected data-i18n="units.days">Days</option>
+                    <option value="weeks" data-i18n="units.weeks">Weeks</option>
+                    <option value="months" data-i18n="units.months">Months</option>
+                  </select>
+                </div>
+              </div>
+              <p style="color: var(--text-secondary); font-size: 12px; margin-top: 6px; margin-left: 2px;"
+                data-i18n="settings.history_retention_desc">
+                Merge versions older than the specified time period
+              </p>
+            </div>
+          </div>
+
+          <!-- Group 3: Diff Viewer -->
+          <div class="settings-group">
+            <div class="settings-group-title" data-i18n="settings.group_diff_viewer">Diff Viewer</div>
+
+            <div class="setting-item"
+              style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+              <label style="margin-bottom: 0;">
+                <span style="color: var(--text-primary); font-size: 14px;" data-i18n="settings.diff_style">Diff
+                  Style</span>
+              </label>
+              <select id="diffStyle" onchange="switchDiffStyle(this.value)" style="
+                width: auto;
+                min-width: 200px;
+                padding: 10px 12px;
+                padding-right: 32px;
+                background-color: var(--bg-tertiary);
+                background-image: url(&quot;data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e&quot;);
+                background-repeat: no-repeat;
+                background-position: right 8px center;
+                background-size: 16px;
+                border: 1px solid var(--border-subtle);
+                border-radius: var(--radius-md);
+                color: var(--text-primary);
+                font-size: 14px;
+                -webkit-appearance: none;
+                appearance: none;
+                text-align: left;
+                cursor: pointer;
+              ">
+                <option value="style-2" data-i18n="settings.diff_style_high_contrast">High Contrast</option>
+                <option value="style-1" data-i18n="settings.diff_style_github">GitHub Classic</option>
+                <option value="style-3" data-i18n="settings.diff_style_gradient">Modern Gradient</option>
+                <option value="style-4" data-i18n="settings.diff_style_terminal">Terminal</option>
+                <option value="style-5" data-i18n="settings.diff_style_neon">Neon</option>
+                <option value="style-6" data-i18n="settings.diff_style_pastel">Pastel</option>
+                <option value="style-7" data-i18n="settings.diff_style_minimal">Minimal Border</option>
+                <option value="style-8" data-i18n="settings.diff_style_split">Split Highlight</option>
+              </select>
+            </div>
+
+            <div class="setting-item"
+              style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+              <label style="margin-bottom: 0;">
+                <span style="color: var(--text-primary); font-size: 14px;" data-i18n="settings.diff_view">Diff
+                  View</span>
+              </label>
+              <div class="segmented-control">
+                <input type="radio" name="diffViewFormat" id="diffViewUnified" value="unified"
+                  onchange="toggleDiffViewFormat(false)">
+                <label for="diffViewUnified" data-i18n="settings.diff_view_unified">Unified</label>
+                <input type="radio" name="diffViewFormat" id="diffViewSplit" value="split" checked
+                  onchange="toggleDiffViewFormat(true)">
+                <label for="diffViewSplit" data-i18n="settings.diff_view_split">Side-by-Side</label>
+                <div class="segmented-control-slider"></div>
+              </div>
+            </div>
+
+            <div class="setting-item"
+              style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+              <label style="margin-bottom: 0;">
+                <span style="color: var(--text-primary); font-size: 14px;" data-i18n="settings.compare_against">Compare
+                  Against</span>
+              </label>
+              <div class="segmented-control">
+                <input type="radio" name="compareMode" id="compareModePrevious" value="previous"
+                  onchange="setCompareMode('previous')">
+                <label for="compareModePrevious" data-i18n="settings.compare_previous">Previous Version</label>
+                <input type="radio" name="compareMode" id="compareModeCurrent" value="current" checked
+                  onchange="setCompareMode('current')">
+                <label for="compareModeCurrent" data-i18n="settings.compare_current">Current File</label>
+                <div class="segmented-control-slider"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Group 3: Appearance -->
+          <div class="settings-group">
+            <div class="settings-group-title" data-i18n="settings.group_appearance">Appearance</div>
+
+            <div class="setting-item"
+              style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+              <label style="margin-bottom: 0;">
+                <span style="color: var(--text-primary); font-size: 14px;" data-i18n="settings.theme">Theme</span>
+              </label>
+              <div class="segmented-control">
+                <input type="radio" name="themeMode" id="themeLight" value="light" onchange="setTheme('light')">
+                <label for="themeLight" title="Light Mode">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                  </svg>
+                </label>
+                <input type="radio" name="themeMode" id="themeDark" value="dark" checked onchange="setTheme('dark')">
+                <label for="themeDark" title="Dark Mode">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                  </svg>
+                </label>
+                <div class="segmented-control-slider"></div>
+              </div>
+            </div>
+
+            <div class="setting-item" style="margin-bottom: 20px;">
+              <label style="display: block; margin-bottom: 12px;">
+                <span style="color: var(--text-primary); font-size: 14px;" data-i18n="settings.color_scheme">Color
+                  Scheme</span>
+              </label>
+              <div class="color-palette-container" id="combinedPaletteContainer">
+                <!-- Colors will be injected by JS -->
+              </div>
+              <!-- Hidden inputs for logic -->
+              <div style="display: none;">
+                <input type="color" id="picassoPrimaryColor" value="#10b981">
+                <input type="color" id="picassoSecondaryColor" value="#3b82f6">
+              </div>
+            </div>
+          </div>
+
+          <!-- Holiday Mode at the very bottom -->
+          <div class="settings-group">
+            <div class="setting-item" style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <span style="color: var(--text-primary); font-size: 14px;" data-i18n="settings.holiday_mode">Holiday
+                  Mode</span>
+              </div>
+              <div class="toggle-switch">
+                <input type="checkbox" id="holidayMode" style="display: none;">
+                <label for="holidayMode" class="toggle-slider" onclick="toggleHolidayMode()"></label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <div class="modal-footer">
+        <button class="btn" onclick="closeSettings()" data-i18n="app.close">Close</button>
+        <button class="btn" onclick="saveSettings()" style="background: var(--success);"
+          data-i18n="app.save_settings">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+
+  <script src="app.js?v=1733338000"></script>
+</body>
+
+</html>

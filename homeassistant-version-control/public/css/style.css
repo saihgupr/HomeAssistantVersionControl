@@ -164,13 +164,14 @@ body {
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--text-primary);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .subtitle {
   color: var(--text-secondary);
   font-size: 15px;
   font-weight: 400;
+  margin-top: -2px;
 }
 
 /* === Tabs === */

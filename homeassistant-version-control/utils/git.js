@@ -1,5 +1,7 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import fs from 'fs';
+import path from 'path';
 
 const execFileAsync = promisify(execFile);
 
@@ -233,6 +235,57 @@ export async function gitDiff(args) {
 export async function gitCheckout(args) {
     await gitExec(['checkout', ...args]);
 }
+
+/**
+ * Safe file restore that handles CIFS/SMB mount quirks.
+ * CIFS mounts can fail with "unable to create file: File exists" when git checkout
+ * tries to atomically replace a file. This function works around the issue
+ * by using git show to get the file content and writing it directly.
+ * 
+ * @param {string} commitHash - The commit hash to restore from
+ * @param {string} filePath - The file path relative to CONFIG_PATH
+ */
+export async function gitCheckoutSafe(commitHash, filePath) {
+    const fullPath = path.join(global.CONFIG_PATH, filePath);
+    let backupContent = null;
+
+    // First, try to backup the existing file content (in case restore fails)
+    try {
+        backupContent = fs.readFileSync(fullPath, 'utf-8');
+    } catch (e) {
+        // File doesn't exist, no backup needed
+    }
+
+    try {
+        // Get the file content from the commit using git show
+        // This avoids git checkout entirely, which has issues with CIFS/SMB mounts
+        const { stdout: newContent } = await gitExec(['show', `${commitHash}:${filePath}`]);
+
+        // Ensure parent directory exists
+        const dir = path.dirname(fullPath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+
+        // Write the content directly to the file
+        // This is a simple overwrite, not atomic rename - works better on CIFS
+        fs.writeFileSync(fullPath, newContent, 'utf-8');
+
+    } catch (error) {
+        console.error(`[git] Restore failed for ${filePath}: ${error.message}`);
+        // Restore failed - try to restore the backup if we had one
+        if (backupContent !== null) {
+            try {
+                fs.writeFileSync(fullPath, backupContent, 'utf-8');
+                console.error(`[git] Restored backup after failed restore: ${filePath}`);
+            } catch (restoreError) {
+                console.error(`[git] CRITICAL: Restore failed AND could not restore backup: ${restoreError.message}`);
+            }
+        }
+        throw error;
+    }
+}
+
 
 export async function gitBranch(args) {
     if (args) {

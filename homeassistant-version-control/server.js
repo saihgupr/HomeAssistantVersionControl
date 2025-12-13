@@ -13,6 +13,7 @@ import {
   gitCheckIsRepo,
   gitDiff,
   gitCheckout,
+  gitCheckoutSafe,
   gitBranch,
   gitRevparse,
   gitRmCached,
@@ -1074,7 +1075,7 @@ app.post('/api/restore-file', async (req, res) => {
     const commitDate = new Date(dateStr).toLocaleString();
 
     // Restore the file - file watcher will detect and auto-commit
-    await gitCheckout([commitHash, '--', filePath]);
+    await gitCheckoutSafe(commitHash, filePath);
     console.log(`[restore] File restored: ${filePath}`);
     console.log(`[restore] File watcher will auto-commit this change`);
 
@@ -1177,7 +1178,7 @@ app.post('/api/restore-commit', async (req, res) => {
     // Restore each file to TARGET version - file watcher will detect and auto-commit all changes
     for (const file of files) {
       console.log(`[restore] Restoring ${file} to version ${target.substring(0, 8)}`);
-      await gitCheckout([target, '--', file]);
+      await gitCheckoutSafe(target, file);
     }
 
     console.log(`[restore] All files restored (${files.length} files)`);
@@ -1301,7 +1302,7 @@ app.post('/api/git/hard-reset', async (req, res) => {
     try {
       // Checkout all files
       for (const file of filesInCommit) {
-        await gitCheckout([commitHash, '--', file]);
+        await gitCheckoutSafe(commitHash, file);
       }
       console.log(`[hard-reset] All files checked out from ${commitHash.substring(0, 8)}`);
 

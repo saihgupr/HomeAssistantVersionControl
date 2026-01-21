@@ -154,6 +154,10 @@ async function loadSettings() {
         document.getElementById('retentionUnit').value = settings.retentionUnit;
         localStorage.setItem('retentionUnit', settings.retentionUnit);
 
+        // Max commits
+        document.getElementById('maxCommits').value = settings.maxCommits;
+        localStorage.setItem('maxCommits', settings.maxCommits);
+        
         // Run cleanup on commit
 
       }
@@ -1003,6 +1007,7 @@ async function saveSettings() {
   const retentionValue = document.getElementById('retentionValue').value;
   const retentionUnit = document.getElementById('retentionUnit').value;
   const historyRetention = document.getElementById('historyRetention').checked;
+  const maxCommits = document.getElementById('maxCommits').value;
   const diffViewSplit = document.getElementById('diffViewSplit').checked;
   const newDiffViewFormat = diffViewSplit ? 'split' : 'unified';
   const newDiffStyle = document.getElementById('diffStyle').value;
@@ -1016,6 +1021,7 @@ async function saveSettings() {
   localStorage.setItem('retentionValue', retentionValue);
   localStorage.setItem('retentionUnit', retentionUnit);
   localStorage.setItem('historyRetention', historyRetention);
+  localStorage.setItem('maxCommits', maxCommits);
   localStorage.setItem('diffViewFormat', newDiffViewFormat);
   localStorage.setItem('diffStyle', newDiffStyle);
 
@@ -1036,7 +1042,8 @@ async function saveSettings() {
         historyRetention,
         retentionType,
         retentionValue,
-        retentionUnit
+        retentionUnit,
+        maxCommits
       })
     });
 
@@ -1053,7 +1060,12 @@ async function saveSettings() {
   }
 
   // Re-render current view to apply changes immediately
-  refreshCurrentView();
+  // If timeline is active, reload it to apply new maxCommits setting
+  if (currentMode === 'timeline') {
+    loadTimeline();
+  } else {
+    refreshCurrentView();
+  }
 
   // Settings saved - close modal
   closeSettings();

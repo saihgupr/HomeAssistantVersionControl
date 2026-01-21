@@ -212,6 +212,47 @@
               </p>
             </div>
 
+            <div id="maxCommitsOptions" style="margin-bottom: 20px;">
+              <label style="display: block; margin-bottom: 8px;">
+                <span style="color: var(--text-primary); font-size: 14px;" data-i18n="settings.max_commits">Max Commits to Show</span>
+              </label>
+              <div class="custom-number-input-wrapper" style="position: relative;">
+                <input type="number" id="maxCommits" min="50" max="10000" value="50" style="
+                  width: 100%;
+                  padding: 10px 32px 10px 12px;
+                  background: var(--bg-tertiary);
+                  border: 1px solid var(--border-subtle);
+                  border-radius: var(--radius-md);
+                  color: var(--text-primary);
+                  font-size: 14px;
+                  -moz-appearance: textfield;
+                  appearance: textfield;
+                ">
+                <div class="custom-spinners"
+                  style="position: absolute; right: 2px; top: 2px; bottom: 2px; display: flex; flex-direction: column; width: 24px;">
+                  <button class="spinner-btn spinner-up" onclick="stepInput('maxCommits', 10)"
+                    style="flex: 1; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                      stroke="#9ca3af" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"
+                      style="transform: rotate(180deg);">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </button>
+                  <button class="spinner-btn spinner-down" onclick="stepInput('maxCommits', -10)"
+                    style="flex: 1; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                      stroke="#9ca3af" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <p style="color: var(--text-secondary); font-size: 12px; margin-top: 6px; margin-left: 2px;"
+                data-i18n="settings.max_commits_desc">
+                Maximum number of commits to display in the timeline (50-10000)
+              </p>
+            </div>
+
             <div class="setting-item" style="margin-bottom: 20px;">
               <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
                 <span style="color: var(--text-primary); font-size: 14px;"

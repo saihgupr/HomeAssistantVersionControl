@@ -327,7 +327,7 @@ let runtimeSettings = {
   retentionType: 'time', // 'time' or 'versions'
   retentionValue: 90,
   retentionUnit: 'days', // 'hours', 'days', 'weeks', 'months'
-
+  maxCommits: 50
 };
 
 // Schema for runtime settings with validation rules and environment variable mapping
@@ -360,6 +360,12 @@ const RUNTIME_SETTINGS_SCHEMA = {
     type: 'enum',
     values: ['hours', 'days', 'weeks', 'months'],
     envKey: 'RETENTION_UNIT'
+  },
+  maxCommits: {
+    type: 'number',
+    min: 1,
+    max: 10000,
+    envKey: 'MAX_COMMITS'
   }
 };
 
@@ -1017,6 +1023,13 @@ app.post('/api/runtime-settings', async (req, res) => {
       runtimeSettings.retentionUnit = newSettings.retentionUnit;
     }
 
+    if (newSettings.maxCommits !== undefined) {
+      const maxCommits = parseInt(newSettings.maxCommits);
+      if (maxCommits >= 1 && maxCommits <= 10000) {
+        runtimeSettings.maxCommits = maxCommits;
+      }
+    }
+
 
 
     // Save to file
@@ -1096,7 +1109,8 @@ app.get('/api/files', async (req, res) => {
 // Git History
 app.get('/api/git/history', async (req, res) => {
   try {
-    const log = await gitLog({ maxCount: 50 });
+    const maxCount = runtimeSettings.maxCommits ? runtimeSettings.maxCommits : 50;
+    const log = await gitLog({ maxCount });
     res.json({ success: true, log });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1164,7 +1178,7 @@ app.get('/api/file-content', async (req, res) => {
 app.get('/api/git/file-history', async (req, res) => {
   try {
     const { filePath } = req.query;
-    const maxCount = 50; // Increased from 20 to show more history
+    const maxCount = runtimeSettings.maxCommits ? runtimeSettings.maxCommits : 50;
     const log = await gitLog({ file: filePath, maxCount });
 
     // Get current file hash

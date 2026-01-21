@@ -165,6 +165,7 @@ For containerized deployments (especially when not persisting the `/data` direct
 
 | Environment Variable | Setting | Type | Valid Values | Default |
 | :--- | :--- | :--- | :--- | :--- |
+| `MAX_COMMITS` | Max Commits | Number | 50-10000 | `50` |
 | `DEBOUNCE_TIME` | Debounce Time | Number | ≥ 0 | `5` |
 | `DEBOUNCE_TIME_UNIT` | Debounce Time Unit | String | `seconds`, `minutes`, `hours`, `days` | `seconds` |
 | `HISTORY_RETENTION` | History Retention | Boolean | `true`, `false`, `yes`, `no`, `1`, `0` | `false` |

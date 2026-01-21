@@ -148,6 +148,7 @@ The application can be configured through the web UI Settings page or via enviro
 | **Retention Type** | Keep history based on time or number of versions | `time` |
 | **Retention Value** | How much history to keep (number of days/hours/weeks/months or versions) | `90` |
 | **Retention Unit** | Time unit for retention (hours, days, weeks, months) | `days` |
+| **Max Commits** | Maximum number of commits to display in the timeline | `50` |
 
 #### Environment Variable Configuration
 

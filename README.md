@@ -199,6 +199,7 @@ services:
       - RETENTION_TYPE=time
       - RETENTION_VALUE=30
       - RETENTION_UNIT=days
+      - MAX_COMMITS=500
 ```
 
 **Docker Run with environment variables:**
@@ -213,6 +214,7 @@ docker run -d \
   -e RETENTION_TYPE=time \
   -e RETENTION_VALUE=30 \
   -e RETENTION_UNIT=days \
+  -e MAX_COMMITS=500 \
   --name home-assistant-version-control \
   ghcr.io/saihgupr/homeassistantversioncontrol:latest
 ```
@@ -228,6 +230,7 @@ When the container starts, you'll see detailed logging showing where each settin
 [init]   retentionType: 'time' (default)
 [init]   retentionValue: 30 (env: RETENTION_VALUE)
 [init]   retentionUnit: 'days' (default)
+[init]   maxCommits: '50' (default)
 ```
 
 Invalid values will trigger warnings:

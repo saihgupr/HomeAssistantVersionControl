@@ -104,7 +104,7 @@ docker run -d \
   -e SUPERVISOR_TOKEN=your_long_lived_access_token_here \
   -e HA_URL=http://homeassistant.local:8123 \
   --name home-assistant-version-control \
-  ghcr.io/saihgupr/homeassistantversioncontrol:latest
+  ghcr.io/saihgupr/home-assistant-version-control:latest
 ```
 
 Replace `/path/to/your/config` with the actual path to your Home Assistant configuration directory.
@@ -185,7 +185,7 @@ For containerized deployments (especially when not persisting the `/data` direct
 version: '3.8'
 services:
   havc:
-    image: ghcr.io/saihgupr/homeassistantversioncontrol:latest
+    image: ghcr.io/saihgupr/home-assistant-version-control:latest
     ports:
       - "54001:54001"
     volumes:

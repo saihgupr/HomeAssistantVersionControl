@@ -3,7 +3,7 @@ services:
     # Home Assistant Version Control
     # Image: https://github.com/saihgupr/HomeAssistantVersionControl/pkgs/container/homeassistantversioncontrol
     # Or build locally with: docker build -t ghcr.io/saihgupr/home-assistant-version-control:latest ./homeassistant-version-control
-    image: ghcr.io/saihgupr/homeassistantversioncontrol:latest
+    image: ghcr.io/saihgupr/home-assistant-version-control:latest
     container_name: ha-version-control
     ports:
       - "54001:54001"

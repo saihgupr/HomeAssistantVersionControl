@@ -429,6 +429,22 @@ const RUNTIME_SETTINGS_SCHEMA = {
   manualMode: {
     type: 'boolean',
     envKey: 'MANUAL_MODE'
+  },
+  includeExtensions: {
+    type: 'list',
+    envKey: 'INCLUDE_EXTENSIONS'
+  },
+  excludeFiles: {
+    type: 'list',
+    envKey: 'EXCLUDE_FILES'
+  },
+  includeStorage: {
+    type: 'list',
+    envKey: 'INCLUDE_STORAGE'
+  },
+  additionalPaths: {
+    type: 'list',
+    envKey: 'ADDITIONAL_PATHS'
   }
 };
 
@@ -462,6 +478,12 @@ function parseEnvVarValue(key, schema, rawValue) {
       const match = schema.values.find(v => v.toLowerCase() === normalized);
       if (match) return { valid: true, value: match };
       return { valid: false, error: `Expected one of [${schema.values.join(', ')}], got: '${rawValue}'` };
+    }
+    case 'list': {
+      const items = trimmed.split(',')
+        .map(item => item.trim())
+        .filter(item => item.length > 0);
+      return { valid: true, value: items };
     }
     default:
       return { valid: false, error: `Unknown type: ${schema.type}` };
@@ -960,6 +982,21 @@ async function loadRuntimeSettings() {
 
   // Layer 1: Apply environment variables
   const envResult = loadSettingsFromEnv();
+  
+  // Handle nested extensions if provided via env
+  if (envResult.settings.includeExtensions) {
+    runtimeSettings.extensions.include = envResult.settings.includeExtensions;
+    delete envResult.settings.includeExtensions;
+  }
+  if (envResult.settings.excludeFiles) {
+    runtimeSettings.extensions.exclude = envResult.settings.excludeFiles;
+    delete envResult.settings.excludeFiles;
+  }
+  if (envResult.settings.includeStorage) {
+    runtimeSettings.extensions.storage = envResult.settings.includeStorage;
+    delete envResult.settings.includeStorage;
+  }
+  
   runtimeSettings = { ...runtimeSettings, ...envResult.settings };
   Object.assign(settingSources, envResult.sources);
 

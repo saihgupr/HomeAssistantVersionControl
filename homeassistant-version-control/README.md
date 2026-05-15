@@ -178,8 +178,26 @@ additional_paths:
 Notes:
 - Paths must be absolute and currently support `/share`, `/media`, `/ssl`, and `/config` prefixes.
 - Paths under `/config` are skipped because `/config` is already tracked automatically.
-- Files are still filtered by `include_extensions` and `exclude_files`.
+- Files and folders are filtered by `include_extensions`, `exclude_files` (or `exclude`), and `exclude_folders`.
 - For `.conf` files, add `conf` to `include_extensions`.
+
+### Exclusions
+
+You can exclude specific files or entire folders from being watched and version controlled. This is highly recommended for directories with frequent changes (like logs or temporary files) to reduce CPU usage.
+
+- `exclude_files` (or `exclude`): List of file names or path prefixes to ignore.
+- `exclude_folders`: List of folder paths to ignore.
+
+Example:
+```yaml
+exclude:
+  - secrets.yaml
+  - ip_bans.yaml
+exclude_folders:
+  - temporary
+  - www/mail_and_packages
+  - custom_components/spook_inverse
+```
 
 Example use case:
 

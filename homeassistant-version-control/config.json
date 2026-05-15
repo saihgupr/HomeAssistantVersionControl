@@ -47,7 +47,11 @@
       "lovelace.*"
     ],
     "additional_paths": [],
-    "remote_url": ""
+    "remote_url": "",
+    "exclude": [],
+    "exclude_folders": [],
+    "watcher_use_polling": true,
+    "watcher_interval": 2000
   },
   "schema": {
     "include_extensions": [
@@ -62,7 +66,14 @@
     "additional_paths": [
       "str"
     ],
-    "remote_url": "str?"
+    "exclude": [
+      "str"
+    ],
+    "exclude_folders": [
+      "str"
+    ],
+    "watcher_use_polling": "bool?",
+    "watcher_interval": "int?"
   },
   "healthcheck": {
     "test": [

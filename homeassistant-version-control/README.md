@@ -250,9 +250,12 @@ For containerized deployments (especially when not persisting the `/data` direct
 | `LIMIT_HISTORY` | Limit History | Boolean | `true`, `false`, `yes`, `no`, `1`, `0` | `false` |
 | `MAX_COMMITS` | Max Commits | Number | 50 - 10000 | `500` |
 | `INCLUDE_EXTENSIONS` | Included Extensions | List | Comma-separated (e.g. `yaml,yml,conf`) | `yaml,yml` |
-| `EXCLUDE_FILES` | Excluded Files/Folders | List | Comma-separated (e.g. `backups,secrets.yaml`) | `secrets.yaml` |
+| `EXCLUDE_FILES` | Excluded Files | List | Comma-separated (e.g. `secrets.yaml,custom.conf`) | `secrets.yaml` |
+| `EXCLUDE_FOLDERS` | Excluded Folders | List | Comma-separated (e.g. `backups,temp`) | `[]` |
 | `INCLUDE_STORAGE` | Included .storage patterns | List | Comma-separated (e.g. `lovelace,core.entity_registry`) | `lovelace*` |
 | `ADDITIONAL_PATHS` | Additional Watch Paths | List | Comma-separated (e.g. `/share,/media`) | `[]` |
+| `WATCHER_USE_POLLING` | Use Polling for Watcher | Boolean | `true`, `false`, `yes`, `no`, `1`, `0` | `true` |
+| `WATCHER_INTERVAL` | Watcher Polling Interval | Number | ≥ 100 (milliseconds) | `2000` |
 
 **Notes:**
 - Boolean values are case-insensitive and accept: `true`/`false`, `yes`/`no`, `1`/`0`
@@ -280,6 +283,8 @@ services:
       - RETENTION_TYPE=time
       - RETENTION_VALUE=30
       - RETENTION_UNIT=days
+      - EXCLUDE_FILES=temporary,backups
+      - WATCHER_USE_POLLING=false
 ```
 
 **Docker Run with environment variables:**

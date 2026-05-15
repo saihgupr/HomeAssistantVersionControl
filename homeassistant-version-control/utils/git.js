@@ -5,32 +5,52 @@ import path from 'path';
 
 const execFileAsync = promisify(execFile);
 
+let gitMutex = Promise.resolve();
+
 // All git commands run inside CONFIG_PATH
 export async function gitExec(args, options = {}) {
     if (!global.CONFIG_PATH) {
         throw new Error('CONFIG_PATH not initialized');
     }
-    const { timeout = 30000, env, ignoreSslErrors = false } = options;
 
-    const execOptions = {
-        cwd: global.CONFIG_PATH,
-        timeout,
-        maxBuffer: 10 * 1024 * 1024, // 10 MB
-        windowsHide: true
-    };
+    // Capture the current mutex tail
+    const previousTask = gitMutex;
 
-    execOptions.env = {
-        GIT_TERMINAL_PROMPT: '0',
-        ...process.env,
-        ...(env || {})
-    };
+    // Create a new tail for the next command
+    let resolveMutex;
+    gitMutex = new Promise(resolve => {
+        resolveMutex = resolve;
+    });
 
-    const finalArgs = [...args];
-    if (ignoreSslErrors) {
-        finalArgs.unshift('-c', 'http.sslVerify=false');
+    try {
+        // Wait for previous command to finish (regardless of success/failure)
+        await previousTask.catch(() => {});
+
+        const { timeout = 30000, env, ignoreSslErrors = false } = options;
+
+        const execOptions = {
+            cwd: global.CONFIG_PATH,
+            timeout,
+            maxBuffer: 10 * 1024 * 1024, // 10 MB
+            windowsHide: true
+        };
+
+        execOptions.env = {
+            GIT_TERMINAL_PROMPT: '0',
+            ...process.env,
+            ...(env || {})
+        };
+
+        const finalArgs = [...args];
+        if (ignoreSslErrors) {
+            finalArgs.unshift('-c', 'http.sslVerify=false');
+        }
+
+        return await execFileAsync('git', finalArgs, execOptions);
+    } finally {
+        // Release the mutex for the next command
+        resolveMutex();
     }
-
-    return execFileAsync('git', finalArgs, execOptions);
 }
 
 // ──────────────────────────────────────────────────

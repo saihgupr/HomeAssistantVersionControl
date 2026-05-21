@@ -341,6 +341,11 @@ let CONFIG_PATH = null;
 global.CONFIG_PATH = null;
 let gitInitialized = false;
 let additionalTrackedPaths = [];
+
+// File watcher state variables
+const debounceTimers = new Map();
+let watcher = null;
+const externalWatchers = [];
 let configOptions = {
   yaml_format: true,
   json_format: false,

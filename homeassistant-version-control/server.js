@@ -2300,7 +2300,8 @@ app.post('/api/git/add-all-and-commit', async (req, res) => {
     console.log('[add-all-and-commit] Adding all config files and committing...');
     const configFiles = await getConfigFiles();
     console.log(`[add-all-and-commit] Found ${configFiles.length} config files to add`);
-    await gitAdd(configFiles);
+    const filteredFiles = configFiles.filter(file => !shouldIgnoreWatchPath(file));
+    await gitAdd(filteredFiles);
     const status = await gitStatus();
     if (status.isClean()) {
       console.log('[add-all-and-commit] No changes to commit.');

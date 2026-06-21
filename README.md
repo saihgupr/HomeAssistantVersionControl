@@ -15,6 +15,8 @@ Home Assistant Version Control provides complete version history for your setup.
 *   **Polished Interface:** Enjoy resizable panels, subtle UI animations, and improved visibility for files tracked outside the main config folder.
 *   **Confetti Mode:** Celebrate every successful restore with a realistic confetti burst (opt-in via settings).
 *   **History Control:** New setting to choose exactly how many commits to keep in your history, helping manage storage on smaller devices.
+*   **Robust Manual Backup Exclusions:** The manual backup endpoint (`POST /api/git/add-all-and-commit`) now automatically respects your `.gitignore` and configured exclusions (preventing HTTP 500 crashes).
+*   **Optimized Standalone Watcher:** Improved path normalization and resolved reference crashes for non-addon (standalone Docker) file-watching environments.
 
 
 ![Screenshot 1](https://github.com/saihgupr/HomeAssistantVersionControl/raw/develop/images/screenshots/1.2.png)
@@ -478,4 +480,4 @@ Want the latest features? The [develop branch](https://github.com/saihgupr/HomeA
 
 ## Support
 
-If you find this project useful, please consider giving it a star ⭐ or [buy me a coffee](https://ko-fi.com/saihgupr) ☕.
+If you find this project useful, please consider giving it a star ⭐ or [making a donation](https://ko-fi.com/saihgupr).

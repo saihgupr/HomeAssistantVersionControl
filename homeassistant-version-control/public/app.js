@@ -2633,6 +2633,7 @@ async function switchMode(mode) {
   // Show/hide sort controls based on mode
   if (['files', 'automations', 'scripts'].includes(mode)) {
     leftPanelActions.style.display = 'block';
+    sortSelect.style.display = '';
 
     // Ensure valid sort state for this mode (prevent selecting removed option)
     if ((mode === 'automations' || mode === 'scripts') && sortState[mode] === 'recently_modified') {
@@ -2643,6 +2644,7 @@ async function switchMode(mode) {
     sortSelect.value = sortState[mode];
   } else {
     leftPanelActions.style.display = 'none';
+    sortSelect.style.display = 'none';
   }
 
   // Update search bar visibility and placeholder

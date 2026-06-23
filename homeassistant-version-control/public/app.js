@@ -140,6 +140,9 @@ let diffMode = localStorage.getItem('diffMode') || 'shifted';
 // Compare to Current mode - true = compare to current file, false = compare to parent commit (GitHub-style)
 let compareToCurrent = localStorage.getItem('compareToCurrent') !== 'false'; // Default: true (ON)
 
+// Arrow direction: false = new intuitive (◀ = older/back in time), true = legacy (◀ = newer)
+let reverseArrowDirection = localStorage.getItem('reverseArrowDirection') === 'true'; // Default: false (new behavior)
+
 // Localization
 let translations = {};
 let currentLanguage = 'en';
@@ -421,6 +424,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     } else {
       compareModePrevious.checked = true;
     }
+  }
+
+  // Load arrow direction setting
+  const reverseArrowDirectionToggle = document.getElementById('reverseArrowDirection');
+  if (reverseArrowDirectionToggle) {
+    reverseArrowDirectionToggle.checked = reverseArrowDirection;
   }
 
   // Load diff style setting
@@ -1128,6 +1137,13 @@ function setCompareMode(mode) {
   localStorage.setItem('diffMode', newDiffMode);
 
   // Refresh the current view to apply new setting
+  refreshCurrentView();
+}
+
+function toggleReverseArrowDirection(isChecked) {
+  reverseArrowDirection = isChecked;
+  localStorage.setItem('reverseArrowDirection', isChecked);
+  // Refresh current view so buttons re-render with correct direction/disabled state
   refreshCurrentView();
 }
 
@@ -3917,8 +3933,15 @@ function updateFileHistoryNavigation(filePath) {
     }
 
     // Update button states
-    prevBtn.disabled = currentFileHistoryIndex === 0;
-    nextBtn.disabled = currentFileHistoryIndex === currentFileHistory.length - 1;
+    // ◀ (prev) goes to older (higher index) unless legacy mode; disabled at the end
+    // ▶ (next) goes to newer (lower index) unless legacy mode; disabled at the start
+    if (reverseArrowDirection) {
+      prevBtn.disabled = currentFileHistoryIndex === 0;
+      nextBtn.disabled = currentFileHistoryIndex === currentFileHistory.length - 1;
+    } else {
+      prevBtn.disabled = currentFileHistoryIndex === currentFileHistory.length - 1;
+      nextBtn.disabled = currentFileHistoryIndex === 0;
+    }
   }
 }
 
@@ -4151,8 +4174,8 @@ function displayAutomationHistory() {
               <div class="history-position" id="automationHistoryPosition">1 of ${currentAutomationHistory.length}</div>
             </div>
             <div class="file-history-actions">
-              <button class="btn" id="autoPrevBtn" onclick="navigateAutomationHistory(-1)" ${currentAutomationHistoryIndex === 0 ? 'disabled' : ''} style="border: 1px solid var(--border-subtle); min-width: 36px; padding: 8px 12px;">◀</button>
-              <button class="btn" id="autoNextBtn" onclick="navigateAutomationHistory(1)" ${currentAutomationHistoryIndex === currentAutomationHistory.length - 1 ? 'disabled' : ''} style="border: 1px solid var(--border-subtle); min-width: 36px; padding: 8px 12px;">▶</button>
+              <button class="btn" id="autoPrevBtn" onclick="navigateAutomationHistory(reverseArrowDirection ? -1 : 1)" ${reverseArrowDirection ? (currentAutomationHistoryIndex === 0 ? 'disabled' : '') : (currentAutomationHistoryIndex === currentAutomationHistory.length - 1 ? 'disabled' : '')} style="border: 1px solid var(--border-subtle); min-width: 36px; padding: 8px 12px;">◀</button>
+              <button class="btn" id="autoNextBtn" onclick="navigateAutomationHistory(reverseArrowDirection ? 1 : -1)" ${reverseArrowDirection ? (currentAutomationHistoryIndex === currentAutomationHistory.length - 1 ? 'disabled' : '') : (currentAutomationHistoryIndex === 0 ? 'disabled' : '')} style="border: 1px solid var(--border-subtle); min-width: 36px; padding: 8px 12px;">▶</button>
             </div>
           </div>
           <div class="diff-view-container" id="automationDiffContent"></div>
@@ -4280,8 +4303,13 @@ function updateAutomationHistoryNavigation() {
     }
 
     // Update button states
-    prevBtn.disabled = currentAutomationHistoryIndex === 0;
-    nextBtn.disabled = currentAutomationHistoryIndex === currentAutomationHistory.length - 1;
+    if (reverseArrowDirection) {
+      prevBtn.disabled = currentAutomationHistoryIndex === 0;
+      nextBtn.disabled = currentAutomationHistoryIndex === currentAutomationHistory.length - 1;
+    } else {
+      prevBtn.disabled = currentAutomationHistoryIndex === currentAutomationHistory.length - 1;
+      nextBtn.disabled = currentAutomationHistoryIndex === 0;
+    }
   }
 }
 
@@ -4503,8 +4531,8 @@ function displayScriptHistory() {
               <div class="history-position" id="scriptHistoryPosition">1 of ${currentScriptHistory.length}</div>
             </div>
             <div class="file-history-actions">
-              <button class="btn" id="scriptPrevBtn" onclick="navigateScriptHistory(-1)" ${currentScriptHistoryIndex === 0 ? 'disabled' : ''} style="border: 1px solid var(--border-subtle); min-width: 36px; padding: 8px 12px;">◀</button>
-              <button class="btn" id="scriptNextBtn" onclick="navigateScriptHistory(1)" ${currentScriptHistoryIndex === currentScriptHistory.length - 1 ? 'disabled' : ''} style="border: 1px solid var(--border-subtle); min-width: 36px; padding: 8px 12px;">▶</button>
+              <button class="btn" id="scriptPrevBtn" onclick="navigateScriptHistory(reverseArrowDirection ? -1 : 1)" ${reverseArrowDirection ? (currentScriptHistoryIndex === 0 ? 'disabled' : '') : (currentScriptHistoryIndex === currentScriptHistory.length - 1 ? 'disabled' : '')} style="border: 1px solid var(--border-subtle); min-width: 36px; padding: 8px 12px;">◀</button>
+              <button class="btn" id="scriptNextBtn" onclick="navigateScriptHistory(reverseArrowDirection ? 1 : -1)" ${reverseArrowDirection ? (currentScriptHistoryIndex === currentScriptHistory.length - 1 ? 'disabled' : '') : (currentScriptHistoryIndex === 0 ? 'disabled' : '')} style="border: 1px solid var(--border-subtle); min-width: 36px; padding: 8px 12px;">▶</button>
             </div>
           </div>
           <div class="diff-view-container" id="scriptDiffContent"></div>
@@ -4633,8 +4661,13 @@ function updateScriptHistoryNavigation() {
     }
 
     // Update button states
-    prevBtn.disabled = currentScriptHistoryIndex === 0;
-    nextBtn.disabled = currentScriptHistoryIndex === currentScriptHistory.length - 1;
+    if (reverseArrowDirection) {
+      prevBtn.disabled = currentScriptHistoryIndex === 0;
+      nextBtn.disabled = currentScriptHistoryIndex === currentScriptHistory.length - 1;
+    } else {
+      prevBtn.disabled = currentScriptHistoryIndex === currentScriptHistory.length - 1;
+      nextBtn.disabled = currentScriptHistoryIndex === 0;
+    }
   }
 }
 
@@ -4828,8 +4861,8 @@ function displayFileHistory(filePath) {
               <div class="history-position" id="historyPosition">1 of ${currentFileHistory.length}</div>
             </div>
                                           <div class="file-history-actions">
-                                            <button class="btn" id="prevBtn" onclick="navigateFileHistory(-1)" ${currentFileHistoryIndex === 0 ? 'disabled' : ''} style="border: 1px solid var(--border-subtle); min-width: 36px; padding: 8px 12px;">◀</button>
-                                            <button class="btn" id="nextBtn" onclick="navigateFileHistory(1)" ${currentFileHistoryIndex === currentFileHistory.length - 1 ? 'disabled' : ''} style="border: 1px solid var(--border-subtle); min-width: 36px; padding: 8px 12px;">▶</button>
+                                            <button class="btn" id="prevBtn" onclick="navigateFileHistory(reverseArrowDirection ? -1 : 1)" ${reverseArrowDirection ? (currentFileHistoryIndex === 0 ? 'disabled' : '') : (currentFileHistoryIndex === currentFileHistory.length - 1 ? 'disabled' : '')} style="border: 1px solid var(--border-subtle); min-width: 36px; padding: 8px 12px;">◀</button>
+                                            <button class="btn" id="nextBtn" onclick="navigateFileHistory(reverseArrowDirection ? 1 : -1)" ${reverseArrowDirection ? (currentFileHistoryIndex === currentFileHistory.length - 1 ? 'disabled' : '') : (currentFileHistoryIndex === 0 ? 'disabled' : '')} style="border: 1px solid var(--border-subtle); min-width: 36px; padding: 8px 12px;">▶</button>
                                           </div>          </div>
           <div class="diff-view-container" id="fileDiffContent"></div>
         </div>
@@ -4876,8 +4909,13 @@ async function loadFileHistoryDiff(filePath) {
   }
 
   // Update button states
-  document.getElementById('prevBtn').disabled = currentFileHistoryIndex === 0;
-  document.getElementById('nextBtn').disabled = currentFileHistoryIndex === currentFileHistory.length - 1;
+  if (reverseArrowDirection) {
+    document.getElementById('prevBtn').disabled = currentFileHistoryIndex === 0;
+    document.getElementById('nextBtn').disabled = currentFileHistoryIndex === currentFileHistory.length - 1;
+  } else {
+    document.getElementById('prevBtn').disabled = currentFileHistoryIndex === currentFileHistory.length - 1;
+    document.getElementById('nextBtn').disabled = currentFileHistoryIndex === 0;
+  }
 
   // Check if this is a newly added file (using status from git log)
   const isNewlyAdded = currentCommit.status === 'A';

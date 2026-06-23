@@ -382,7 +382,8 @@ let runtimeSettings = {
     storage: ['lovelace', 'lovelace_dashboards', 'lovelace_resources', 'lovelace.*'] // Files in .storage to track
   },
   additionalPaths: [],
-  manualMode: false
+  manualMode: false,
+  legacyArrowDirection: false
 };
 
 // Schema for runtime settings with validation rules and environment variable mapping
@@ -445,6 +446,10 @@ const RUNTIME_SETTINGS_SCHEMA = {
   additionalPaths: {
     type: 'list',
     envKey: 'ADDITIONAL_PATHS'
+  },
+  legacyArrowDirection: {
+    type: 'boolean',
+    envKey: 'LEGACY_ARROW_DIRECTION'
   }
 };
 
@@ -1387,6 +1392,10 @@ async function initRepo() {
         runtimeSettings.manualMode = !!config.manual_mode;
         console.log(`[init] Manual mode from config: ${runtimeSettings.manualMode}`);
       }
+      if (config.legacy_arrow_direction !== undefined) {
+        runtimeSettings.legacyArrowDirection = !!config.legacy_arrow_direction;
+        console.log(`[init] Legacy arrow direction from config: ${runtimeSettings.legacyArrowDirection}`);
+      }
 
       // Handle remote_url from config.json
       if (config.remote_url && config.remote_url.trim() !== '' && config.remote_url !== runtimeSettings.cloudSync.remoteUrl) {
@@ -1697,6 +1706,10 @@ app.post('/api/runtime-settings', async (req, res) => {
 
     if (newSettings.manualMode !== undefined) {
       runtimeSettings.manualMode = !!newSettings.manualMode;
+    }
+
+    if (newSettings.legacyArrowDirection !== undefined) {
+      runtimeSettings.legacyArrowDirection = !!newSettings.legacyArrowDirection;
     }
 
     if (newSettings.retentionType !== undefined) {

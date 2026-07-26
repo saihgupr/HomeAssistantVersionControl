@@ -378,6 +378,17 @@ If you are using a custom Git server like Gitea, follow these steps to ensure a 
     http://YOUR_API_TOKEN@YOUR_SERVER_IP:PORT/YOUR_USERNAME/VersionControlBackup.git
     ```
 
+#### GitLab
+
+1. **Create a Private Repository:** Create a new **private** repository and ensure the default branch is **`master`**.
+2. Create a Project Access Token via Settings > Access tokens, with
+   * **Role:**  `Maintainer`
+   * **Scope:** `write_repository`
+3. **Authentication URL:** Use the following URL format in the Cloud Sync settings, substituting your token, username and repository name:
+    ```
+    https://oauth2:YOUR_PAT@gitlab.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+    ```
+
 </details>
 
 ## API

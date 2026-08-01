@@ -1164,6 +1164,40 @@ async function getConfigFiles() {
 }
 
 /**
+ * Filter an array of file paths against user exclusions and git ignore rules
+ * @param {Array<string>} files Array of file paths
+ * @returns {Promise<Array<string>>} Array of non-ignored file paths
+ */
+async function filterGitIgnoredFiles(files) {
+  if (!files || files.length === 0) return [];
+
+  // 1. Filter out files matching internal ignore rules & user exclusions
+  const candidates = files.filter(file => !shouldIgnoreWatchPath(file));
+  if (candidates.length === 0) return [];
+
+  // 2. Filter out files ignored by git (.gitignore / .git/info/exclude)
+  try {
+    const { stdout } = await gitExec(['check-ignore', ...candidates]);
+    const ignoredSet = new Set(
+      stdout
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+    );
+    return candidates.filter(file => !ignoredSet.has(file));
+  } catch (e) {
+    const stdout = e.stdout || '';
+    const ignoredSet = new Set(
+      stdout
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+    );
+    return candidates.filter(file => !ignoredSet.has(file));
+  }
+}
+
+/**
  * Find all nested .git directories
  * @returns {Promise<Array<string>>} List of relative paths to directories containing .git
  */
@@ -2236,9 +2270,12 @@ app.post('/api/git/add-all-and-commit', async (req, res) => {
   try {
     ensureGitInitialized();
     console.log('[add-all-and-commit] Adding all config files and committing...');
-    const configFiles = await getConfigFiles();
-    console.log(`[add-all-and-commit] Found ${configFiles.length} config files to add`);
-    await gitAdd(configFiles);
+    const rawConfigFiles = await getConfigFiles();
+    const configFiles = await filterGitIgnoredFiles(rawConfigFiles);
+    console.log(`[add-all-and-commit] Found ${configFiles.length} non-ignored config files to add`);
+    if (configFiles.length > 0) {
+      await gitAdd(configFiles);
+    }
     const status = await gitStatus();
     if (status.isClean()) {
       console.log('[add-all-and-commit] No changes to commit.');

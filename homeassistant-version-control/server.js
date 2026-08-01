@@ -4438,12 +4438,24 @@ async function pushToRemote(includeSecrets = false) {
  * Triggers cloud sync push if pushFrequency is set to 'every_commit'
  */
 async function triggerAutoPushIfConfigured() {
-  if (runtimeSettings.cloudSync.enabled &&
-      runtimeSettings.cloudSync.pushFrequency === 'every_commit' &&
-      runtimeSettings.cloudSync.remoteUrl) {
+  if (!runtimeSettings.cloudSync.enabled || runtimeSettings.cloudSync.pushFrequency !== 'every_commit') {
+    return;
+  }
+
+  let remoteUrl = runtimeSettings.cloudSync.remoteUrl || runtimeSettings.cloudSync.githubRemoteUrl;
+
+  if (!remoteUrl && runtimeSettings.cloudSync.authToken && runtimeSettings.cloudSync.authProvider === 'github') {
+    console.log('[cloud-sync] Remote URL missing but GitHub token present - auto-resolving repository...');
+    const repoResult = await ensureGitHubRepository('VersionControlBackup');
+    if (repoResult.success) {
+      remoteUrl = repoResult.repo.clone_url;
+    }
+  }
+
+  if (remoteUrl) {
     console.log('[cloud-sync] Running auto push after commit...');
     try {
-      await setupGitRemote(runtimeSettings.cloudSync.remoteUrl, runtimeSettings.cloudSync.authToken);
+      await setupGitRemote(remoteUrl, runtimeSettings.cloudSync.authToken);
       await pushToRemote(runtimeSettings.cloudSync.includeSecrets);
     } catch (e) {
       console.error('[cloud-sync] Auto push failed:', e.message);
@@ -4666,19 +4678,17 @@ app.post('/api/git/flush', async (req, res) => {
   }
 });
 
-// Create GitHub repository
-app.post('/api/github/create-repo', async (req, res) => {
+/**
+ * Helper to ensure a GitHub repository exists and runtimeSettings.cloudSync.remoteUrl is configured
+ */
+async function ensureGitHubRepository(repoName = 'VersionControlBackup') {
+  const token = runtimeSettings.cloudSync.authToken;
+  if (!token) {
+    return { success: false, error: 'Not authenticated with GitHub' };
+  }
+
   try {
-    const { repoName } = req.body;
-    const token = runtimeSettings.cloudSync.authToken;
-
-    if (!token) {
-      return res.status(400).json({ success: false, error: 'Not authenticated with GitHub' });
-    }
-
-    if (!repoName) {
-      return res.status(400).json({ success: false, error: 'Repository name is required' });
-    }
+    const targetRepoName = repoName || 'VersionControlBackup';
 
     // Create private repository via GitHub API
     const response = await fetch('https://api.github.com/user/repos', {
@@ -4690,24 +4700,22 @@ app.post('/api/github/create-repo', async (req, res) => {
         'User-Agent': 'HomeAssistantVersionControl'
       },
       body: JSON.stringify({
-        name: repoName,
+        name: targetRepoName,
         description: 'Home Assistant configuration backup managed by Home Assistant Version Control',
         private: true,
-        auto_init: false // Don't create README, we'll push our own content
+        auto_init: false
       })
     });
 
     const data = await response.json();
 
-    // Check if repo already exists - if so, fetch and use it
     if (!response.ok) {
       const alreadyExists = data.errors?.some(e => e.message?.includes('already exists')) ||
         data.message?.includes('already exists');
 
       if (alreadyExists) {
-        console.log('[github create-repo] Repository already exists, fetching existing repo...');
+        console.log('[github ensure-repo] Repository already exists, fetching existing repo...');
 
-        // Get the authenticated user to build the repo URL
         const userResponse = await fetch('https://api.github.com/user', {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -4717,13 +4725,11 @@ app.post('/api/github/create-repo', async (req, res) => {
         });
 
         if (!userResponse.ok) {
-          return res.status(500).json({ success: false, error: 'Failed to get user info' });
+          return { success: false, error: 'Failed to get user info' };
         }
 
         const userData = await userResponse.json();
-
-        // Fetch the existing repo
-        const repoResponse = await fetch(`https://api.github.com/repos/${userData.login}/${repoName}`, {
+        const repoResponse = await fetch(`https://api.github.com/repos/${userData.login}/${targetRepoName}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/vnd.github.v3+json',
@@ -4732,21 +4738,18 @@ app.post('/api/github/create-repo', async (req, res) => {
         });
 
         if (!repoResponse.ok) {
-          return res.status(500).json({ success: false, error: 'Repository exists but could not be accessed' });
+          return { success: false, error: 'Repository exists but could not be accessed' };
         }
 
         const repoData = await repoResponse.json();
-        console.log('[github create-repo] Using existing repository:', repoData.clone_url);
+        console.log('[github ensure-repo] Using existing repository:', repoData.clone_url);
 
-        // Save the remote URL (both active and GitHub-specific)
         runtimeSettings.cloudSync.remoteUrl = repoData.clone_url;
         runtimeSettings.cloudSync.githubRemoteUrl = repoData.clone_url;
         await saveRuntimeSettings();
-
-        // Set up the git remote
         await setupGitRemote(repoData.clone_url, token);
 
-        return res.json({
+        return {
           success: true,
           existing: true,
           repo: {
@@ -4755,27 +4758,20 @@ app.post('/api/github/create-repo', async (req, res) => {
             url: repoData.html_url,
             clone_url: repoData.clone_url
           }
-        });
+        };
       }
 
-      console.error('[github create-repo] Error:', data.message);
-      return res.status(response.status).json({
-        success: false,
-        error: data.message || 'Failed to create repository'
-      });
+      console.error('[github ensure-repo] Error:', data.message);
+      return { success: false, error: data.message || 'Failed to create repository' };
     }
 
-    console.log('[github create-repo] Created repository:', data.clone_url);
-
-    // Save the remote URL (both active and GitHub-specific)
+    console.log('[github ensure-repo] Created repository:', data.clone_url);
     runtimeSettings.cloudSync.remoteUrl = data.clone_url;
     runtimeSettings.cloudSync.githubRemoteUrl = data.clone_url;
     await saveRuntimeSettings();
-
-    // Set up the git remote
     await setupGitRemote(data.clone_url, token);
 
-    res.json({
+    return {
       success: true,
       repo: {
         name: data.name,
@@ -4783,7 +4779,23 @@ app.post('/api/github/create-repo', async (req, res) => {
         url: data.html_url,
         clone_url: data.clone_url
       }
-    });
+    };
+  } catch (error) {
+    console.error('[github ensure-repo] Error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Create GitHub repository
+app.post('/api/github/create-repo', async (req, res) => {
+  try {
+    const { repoName } = req.body;
+    const result = await ensureGitHubRepository(repoName || 'VersionControlBackup');
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(400).json(result);
+    }
   } catch (error) {
     console.error('[github create-repo] Error:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -4859,13 +4871,23 @@ app.post('/api/cloud-sync/push', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Cloud sync is not enabled' });
     }
 
-    if (!runtimeSettings.cloudSync.remoteUrl) {
-      return res.status(400).json({ success: false, error: 'Remote URL not configured' });
+    let remoteUrl = runtimeSettings.cloudSync.remoteUrl || runtimeSettings.cloudSync.githubRemoteUrl;
+
+    if (!remoteUrl && runtimeSettings.cloudSync.authToken && runtimeSettings.cloudSync.authProvider === 'github') {
+      console.log('[cloud-sync push] Remote URL missing but GitHub token present - auto-resolving repository...');
+      const repoResult = await ensureGitHubRepository('VersionControlBackup');
+      if (repoResult.success) {
+        remoteUrl = repoResult.repo.clone_url;
+      }
+    }
+
+    if (!remoteUrl) {
+      return res.status(400).json({ success: false, error: 'Remote URL not configured. Please enter a remote repository URL.' });
     }
 
     // Set up remote (in case settings changed)
     const setupResult = await setupGitRemote(
-      runtimeSettings.cloudSync.remoteUrl,
+      remoteUrl,
       runtimeSettings.cloudSync.authToken
     );
     if (!setupResult.success) {

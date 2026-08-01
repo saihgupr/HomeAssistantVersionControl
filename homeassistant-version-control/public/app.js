@@ -1601,12 +1601,16 @@ async function triggerManualCommit() {
 // Cloud Sync Functions
 // =====================================
 
-function handleCloudSyncToggle() {
+function handleCloudSyncToggle(save = false) {
   const cloudSyncEnabled = document.getElementById('cloudSyncEnabled');
   const cloudSyncOptions = document.getElementById('cloudSyncOptions');
 
   if (cloudSyncEnabled && cloudSyncOptions) {
     cloudSyncOptions.style.display = cloudSyncEnabled.checked ? 'block' : 'none';
+  }
+
+  if (save) {
+    saveCloudSyncSettings(true);
   }
 }
 
@@ -1786,36 +1790,32 @@ async function updateCustomRepoAvatar(remoteUrl) {
 }
 
 async function saveCloudSyncSettings(silent = false) {
-  const enabled = document.getElementById('cloudSyncEnabled').checked;
-  const isGithub = document.getElementById('cloudProviderGithub').checked;
+  const cloudSyncEnabled = document.getElementById('cloudSyncEnabled');
+  const enabled = cloudSyncEnabled ? cloudSyncEnabled.checked : false;
+  const providerGithub = document.getElementById('cloudProviderGithub');
+  const isGithub = providerGithub ? providerGithub.checked : true;
   let remoteUrl = '';
-  let authProvider = '';
+  let authProvider = isGithub ? 'github' : 'generic';
+
+  const inputUrlElement = document.getElementById('cloudRemoteUrl');
+  const inputUrl = inputUrlElement ? inputUrlElement.value.trim() : '';
 
   if (isGithub) {
     // For GitHub mode, DON'T send the hidden input URL - it might be a Custom URL
     // Let the backend use the stored GitHub URL instead
     // Only exception: if the hidden input has a github.com URL, we can send it
-    const inputUrl = document.getElementById('cloudRemoteUrl').value || '';
     if (inputUrl.includes('github.com')) {
       remoteUrl = inputUrl;
     }
-    // Otherwise leave remoteUrl empty - backend will use stored githubRemoteUrl
-    authProvider = 'github';
   } else {
     // Custom mode - use the URL from the input
-    remoteUrl = document.getElementById('cloudRemoteUrl').value;
-    authProvider = 'generic';
-    if (!remoteUrl) {
-      if (!silent) {
-        // showNotification('Please enter a remote URL', 'error');
-      }
-      return false;
-    }
+    remoteUrl = inputUrl;
   }
 
-  const pushFrequency = document.getElementById('cloudPushFrequency').value;
-  const includeSecrets = document.getElementById('cloudIncludeSecrets').checked;
-  const ignoreSslErrors = document.getElementById('cloudIgnoreSslErrors').checked;
+  const pushFrequencyElement = document.getElementById('cloudPushFrequency');
+  const pushFrequency = pushFrequencyElement ? pushFrequencyElement.value : 'manual';
+  const includeSecrets = document.getElementById('cloudIncludeSecrets')?.checked ?? false;
+  const ignoreSslErrors = document.getElementById('cloudIgnoreSslErrors')?.checked ?? false;
 
   try {
     const payload = {

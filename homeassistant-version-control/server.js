@@ -2359,6 +2359,7 @@ app.post('/api/git/add-all-and-commit', async (req, res) => {
     const commitMessage = 'Manual commit: Add all config files and stage changes';
     await gitCommit(commitMessage);
     console.log(`[add-all-and-commit] Committed: ${commitMessage}`);
+    await triggerAutoPushIfConfigured();
     res.json({ success: true, message: `All ${configFiles.length} config files added and committed.` });
   } catch (error) {
     console.error('[add-all-and-commit] Error:', error);
@@ -2882,6 +2883,7 @@ app.post('/api/git/commit-manual', async (req, res) => {
     await gitCommit(commitMessage);
     
     console.log(`[manual] Created commit: ${commitMessage}`);
+    await triggerAutoPushIfConfigured();
     
     res.json({
       success: true,
@@ -3112,17 +3114,7 @@ function initializeWatcher() {
         }
 
         // Cloud sync push if enabled and configured for every commit
-        if (runtimeSettings.cloudSync.enabled &&
-          runtimeSettings.cloudSync.pushFrequency === 'every_commit' &&
-          runtimeSettings.cloudSync.remoteUrl) {
-          console.log('[watcher] Running cloud sync push after commit...');
-          try {
-            await setupGitRemote(runtimeSettings.cloudSync.remoteUrl, runtimeSettings.cloudSync.authToken);
-            await pushToRemote(runtimeSettings.cloudSync.includeSecrets);
-          } catch (e) {
-            console.error('[watcher] Cloud sync push failed:', e.message);
-          }
-        }
+        await triggerAutoPushIfConfigured();
 
         // Clean up the timer reference
         debounceTimers.delete(filePath);
@@ -4439,6 +4431,23 @@ async function pushToRemote(includeSecrets = false) {
     await saveRuntimeSettings();
 
     return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Triggers cloud sync push if pushFrequency is set to 'every_commit'
+ */
+async function triggerAutoPushIfConfigured() {
+  if (runtimeSettings.cloudSync.enabled &&
+      runtimeSettings.cloudSync.pushFrequency === 'every_commit' &&
+      runtimeSettings.cloudSync.remoteUrl) {
+    console.log('[cloud-sync] Running auto push after commit...');
+    try {
+      await setupGitRemote(runtimeSettings.cloudSync.remoteUrl, runtimeSettings.cloudSync.authToken);
+      await pushToRemote(runtimeSettings.cloudSync.includeSecrets);
+    } catch (e) {
+      console.error('[cloud-sync] Auto push failed:', e.message);
+    }
   }
 }
 

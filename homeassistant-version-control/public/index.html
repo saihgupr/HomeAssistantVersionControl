@@ -537,7 +537,7 @@
                   <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
                     <span style="color: var(--text-primary); font-size: 14px;" data-i18n="settings.cloud_ignore_ssl">Ignore SSL Errors</span>
                     <div class="toggle-switch">
-                      <input type="checkbox" id="cloudIgnoreSslErrors" style="display: none;">
+                      <input type="checkbox" id="cloudIgnoreSslErrors" onchange="saveCloudSyncSettings(true)" style="display: none;">
                       <label for="cloudIgnoreSslErrors" class="toggle-slider"></label>
                     </div>
                   </div>
@@ -678,7 +678,7 @@
                   <span style="color: var(--text-primary); font-size: 14px;"
                     data-i18n="settings.cloud_push_frequency">Push Frequency</span>
                 </label>
-                <select id="cloudPushFrequency" style="
+                <select id="cloudPushFrequency" onchange="saveCloudSyncSettings(true)" style="
                   width: auto;
                   min-width: 180px;
                   padding: 10px 12px;
@@ -709,7 +709,7 @@
                   <span style="color: var(--text-primary); font-size: 14px;"
                     data-i18n="settings.cloud_include_secrets">Include secrets.yaml</span>
                   <div class="toggle-switch">
-                    <input type="checkbox" id="cloudIncludeSecrets" style="display: none;">
+                    <input type="checkbox" id="cloudIncludeSecrets" onchange="saveCloudSyncSettings(true)" style="display: none;">
                     <label for="cloudIncludeSecrets" class="toggle-slider"></label>
                   </div>
                 </label>

@@ -72,10 +72,10 @@ const HOST = process.env.HOST || '::';
 const EXTERNAL_MIRROR_DIR = '.havc_external';
 const ALLOWED_ADDITIONAL_PATH_PREFIXES = ['/share', '/media', '/ssl', '/config'];
 
-// Ensure HOME is set for git
+// Ensure HOME is set for git & SSH compatibility
 if (!process.env.HOME) {
-  process.env.HOME = '/tmp';
-  console.log('[init] Set HOME=/tmp for git compatibility');
+  process.env.HOME = '/root';
+  console.log('[init] Set HOME=/root for git and SSH compatibility');
 }
 
 function configureGitIdentity() {
@@ -3860,7 +3860,7 @@ const server = app.listen(PORT, HOST, (err) => {
   }
 
   console.log('='.repeat(60));
-  console.log('Home Assistant Version Control v1.2.0');
+  console.log('Home Assistant Version Control');
   console.log('='.repeat(60));
   console.log(`Server running at http://${HOST}:${PORT}`);
 

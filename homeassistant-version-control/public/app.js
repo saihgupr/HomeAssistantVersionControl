@@ -2205,13 +2205,19 @@ async function loadGitHubUser() {
       const repoLink = document.getElementById('githubRepoLink');
       const remoteUrl = document.getElementById('cloudRemoteUrl')?.value;
       if (repoLink) {
-        // Show the user's name or login
         repoLink.textContent = data.user.name || data.user.login;
-        // Link to the repo if available
+        let targetUrl = `https://github.com/${data.user.login}`;
         if (remoteUrl) {
-          const browserUrl = remoteUrl.replace(/\.git$/, '');
-          repoLink.href = browserUrl;
+          // Remove inline token credentials (e.g. https://token@github.com/...)
+          const cleanUrl = remoteUrl.replace(/https?:\/\/[^@]+@/, 'https://').replace(/\.git$/, '');
+          if (cleanUrl.startsWith('http')) {
+            targetUrl = cleanUrl;
+          }
+        } else {
+          const repoName = document.getElementById('cloudRepoName')?.value || 'VersionControlBackup';
+          targetUrl = `https://github.com/${data.user.login}/${repoName}`;
         }
+        repoLink.href = targetUrl;
       }
     } else {
       // Not connected - show repo name section

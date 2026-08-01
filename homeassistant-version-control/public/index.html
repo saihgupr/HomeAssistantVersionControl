@@ -656,7 +656,8 @@
                     style="display: none; padding: 8px 12px; background: var(--bg-tertiary); border-radius: var(--radius-md);">
                     <div style="display: flex; align-items: center; gap: 10px;">
                       <img id="githubAvatar" src="" alt="" style="width: 24px; height: 24px; border-radius: 50%;">
-                      <a id="githubRepoLink" href="#" target="_blank"
+                      <a id="githubRepoLink" href="#" target="_blank" rel="noopener noreferrer"
+                        onclick="if(this.href && !this.href.endsWith('#')) { window.open(this.href, '_blank'); return false; }"
                         style="color: var(--text-primary); font-size: 14px; font-weight: 500; text-decoration: none; flex: 1;"
                         onmouseover="this.style.color='var(--accent-blue)'; this.style.textDecoration='underline'"
                         onmouseout="this.style.color='var(--text-primary)'; this.style.textDecoration='none'">

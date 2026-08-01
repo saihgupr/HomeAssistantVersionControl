@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.3.0]
+
+### Added
+- **SSH Key Authentication & Remote Support:** Full support for custom SSH keys loaded from `/config/.ssh` for Git operations over SSH with Gitea, GitLab, GitHub, and custom servers.
+- **GitLab Integration Guide:** Added setup documentation for GitLab private repositories and Access Tokens.
+- **UI Customizations:** Configurable arrow direction for commit/push visual indicators, timeline item spacing fixes, and sort dropdown fixes.
+- **Flush Repository Tool:** Conveniently reset local Git repository state directly from the settings interface.
+- **Environment Variables:** Support for custom environment variables like `CONFIG_PATH`.
+
+### Fixed
+- **Ignore Rules in Manual Commits:** Fixed `add-all-and-commit` endpoint to strictly respect `.gitignore` rules and custom file/folder exclusions.
+- **Watcher Exclusions & Performance:** Improved file watcher path normalization and unwatching logic to significantly reduce memory and CPU overhead.
+- **UI Header Cleanups:** Removed static version badges from header and startup logs for consistent display.
+- **Supervisor 2026.04.0+ Compatibility:** Multi-arch build updates ensuring compatibility across all Home Assistant Supervisor platforms.
+
 ## [1.2.3]
 
 ### Fixed

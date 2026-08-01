@@ -48,7 +48,11 @@
     ],
     "additional_paths": [],
     "remote_url": "",
-    "legacy_arrow_direction": false
+    "legacy_arrow_direction": false,
+    "exclude": [],
+    "exclude_folders": [],
+    "watcher_use_polling": true,
+    "watcher_interval": 2000
   },
   "schema": {
     "include_extensions": [
@@ -64,7 +68,15 @@
       "str"
     ],
     "remote_url": "str?",
-    "legacy_arrow_direction": "bool"
+    "legacy_arrow_direction": "bool",
+    "exclude": [
+      "str"
+    ],
+    "exclude_folders": [
+      "str"
+    ],
+    "watcher_use_polling": "bool?",
+    "watcher_interval": "int?"
   },
   "healthcheck": {
     "test": [

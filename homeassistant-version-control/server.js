@@ -341,6 +341,11 @@ let CONFIG_PATH = null;
 global.CONFIG_PATH = null;
 let gitInitialized = false;
 let additionalTrackedPaths = [];
+
+// File watcher state variables
+const debounceTimers = new Map();
+let watcher = null;
+const externalWatchers = [];
 let configOptions = {
   yaml_format: true,
   json_format: false,
@@ -379,11 +384,14 @@ let runtimeSettings = {
   extensions: {
     include: ['yaml', 'yml'], // File extensions to track
     exclude: ['secrets.yaml'], // Specific files to ignore (always ignored regardless of extension)
+    excludeFolders: [], // Entire folders to ignore
     storage: ['lovelace', 'lovelace_dashboards', 'lovelace_resources', 'lovelace.*'] // Files in .storage to track
   },
   additionalPaths: [],
   manualMode: false,
-  legacyArrowDirection: false
+  legacyArrowDirection: false,
+  watcherUsePolling: true,
+  watcherInterval: 2000
 };
 
 // Schema for runtime settings with validation rules and environment variable mapping
@@ -397,6 +405,15 @@ const RUNTIME_SETTINGS_SCHEMA = {
     type: 'enum',
     values: ['seconds', 'minutes', 'hours', 'days'],
     envKey: 'DEBOUNCE_TIME_UNIT'
+  },
+  watcherUsePolling: {
+    type: 'boolean',
+    envKey: 'WATCHER_USE_POLLING'
+  },
+  watcherInterval: {
+    type: 'number',
+    min: 100,
+    envKey: 'WATCHER_INTERVAL'
   },
   historyRetention: {
     type: 'boolean',
@@ -438,6 +455,10 @@ const RUNTIME_SETTINGS_SCHEMA = {
   excludeFiles: {
     type: 'list',
     envKey: 'EXCLUDE_FILES'
+  },
+  excludeFolders: {
+    type: 'list',
+    envKey: 'EXCLUDE_FOLDERS'
   },
   includeStorage: {
     type: 'list',
@@ -954,6 +975,17 @@ function generateGitignoreContent(extraIgnores = [], extensions = null) {
     }
   }
 
+  // Add excluded folders
+  const excludeFolders = ext.excludeFolders || [];
+  if (excludeFolders.length > 0) {
+    content += `\n# Excluded folders\n`;
+    for (const folder of excludeFolders) {
+      const normalizedFolder = folder.replace(/[\\\/]$/, '');
+      content += `${normalizedFolder}/\n`;
+      content += `${normalizedFolder}/**\n`;
+    }
+  }
+
   return content;
 }
 
@@ -996,6 +1028,10 @@ async function loadRuntimeSettings() {
   if (envResult.settings.excludeFiles) {
     runtimeSettings.extensions.exclude = envResult.settings.excludeFiles;
     delete envResult.settings.excludeFiles;
+  }
+  if (envResult.settings.excludeFolders) {
+    runtimeSettings.extensions.excludeFolders = envResult.settings.excludeFolders;
+    delete envResult.settings.excludeFolders;
   }
   if (envResult.settings.includeStorage) {
     runtimeSettings.extensions.storage = envResult.settings.includeStorage;
@@ -1397,30 +1433,64 @@ async function initRepo() {
       if (config.liveConfigPath) {
         CONFIG_PATH = config.liveConfigPath;
       }
-      // Load extensions from add-on config - these override runtimeSettings
-      if (config.include_extensions && Array.isArray(config.include_extensions)) {
-        runtimeSettings.extensions.include = config.include_extensions
+      // Load extensions from add-on config - these merge with runtimeSettings
+      if (config.include_extensions && Array.isArray(config.include_extensions) && config.include_extensions.length > 0) {
+        const configInclude = config.include_extensions
           .map(ext => ext.trim().replace(/^\./, '')) // Remove leading dots
           .filter(ext => ext.length > 0);
-        console.log(`[init] Include extensions from config:`, runtimeSettings.extensions.include);
+        
+        runtimeSettings.extensions.include = Array.from(new Set([
+          ...(runtimeSettings.extensions.include || []),
+          ...configInclude
+        ]));
+        console.log(`[init] Include extensions (merged):`, runtimeSettings.extensions.include);
       }
-      if (config.exclude_files && Array.isArray(config.exclude_files)) {
-        runtimeSettings.extensions.exclude = config.exclude_files
+      // Support both exclude and exclude_files for flexibility (#29)
+      const excludeConfig = config.exclude_files || config.exclude;
+      if (excludeConfig && Array.isArray(excludeConfig) && excludeConfig.length > 0) {
+        const configExclude = excludeConfig
           .map(file => file.trim())
           .filter(file => file.length > 0);
-        console.log(`[init] Exclude files from config:`, runtimeSettings.extensions.exclude);
+        
+        runtimeSettings.extensions.exclude = Array.from(new Set([
+          ...(runtimeSettings.extensions.exclude || []),
+          ...configExclude
+        ]));
+        console.log(`[init] Exclude files (merged):`, runtimeSettings.extensions.exclude);
       }
-      if (config.include_storage && Array.isArray(config.include_storage)) {
-        runtimeSettings.extensions.storage = config.include_storage
+      if (config.exclude_folders && Array.isArray(config.exclude_folders) && config.exclude_folders.length > 0) {
+        const configExcludeFolders = config.exclude_folders
+          .map(folder => folder.trim())
+          .filter(folder => folder.length > 0);
+        
+        runtimeSettings.extensions.excludeFolders = Array.from(new Set([
+          ...(runtimeSettings.extensions.excludeFolders || []),
+          ...configExcludeFolders
+        ]));
+        console.log(`[init] Exclude folders (merged):`, runtimeSettings.extensions.excludeFolders);
+      }
+      if (config.include_storage && Array.isArray(config.include_storage) && config.include_storage.length > 0) {
+        const configStorage = config.include_storage
           .map(file => file.trim())
           .filter(file => file.length > 0);
-        console.log(`[init] Include storage files from config:`, runtimeSettings.extensions.storage);
+        
+        runtimeSettings.extensions.storage = Array.from(new Set([
+          ...(runtimeSettings.extensions.storage || []),
+          ...configStorage
+        ]));
+        console.log(`[init] Include storage files (merged):`, runtimeSettings.extensions.storage);
       }
       if (config.additional_paths && Array.isArray(config.additional_paths)) {
-        runtimeSettings.additionalPaths = config.additional_paths
-          .map(p => String(p || '').trim())
-          .filter(Boolean);
-        console.log(`[init] Additional tracked paths from config:`, runtimeSettings.additionalPaths);
+        runtimeSettings.additionalPaths = config.additional_paths;
+        console.log(`[init] Additional paths from config:`, runtimeSettings.additionalPaths);
+      }
+      if (config.watcher_use_polling !== undefined) {
+        runtimeSettings.watcherUsePolling = !!config.watcher_use_polling;
+        console.log(`[init] Watcher use polling from config:`, runtimeSettings.watcherUsePolling);
+      }
+      if (config.watcher_interval !== undefined) {
+        runtimeSettings.watcherInterval = parseInt(config.watcher_interval) || 2000;
+        console.log(`[init] Watcher interval from config:`, runtimeSettings.watcherInterval);
       }
       if (config.manual_mode !== undefined) {
         runtimeSettings.manualMode = !!config.manual_mode;
@@ -1785,6 +1855,11 @@ app.post('/api/runtime-settings', async (req, res) => {
         runtimeSettings.extensions.exclude = newSettings.extensions.exclude
           .map(file => file.trim())
           .filter(file => file.length > 0);
+      }
+      if (newSettings.extensions.excludeFolders !== undefined && Array.isArray(newSettings.extensions.excludeFolders)) {
+        runtimeSettings.extensions.excludeFolders = newSettings.extensions.excludeFolders
+          .map(folder => folder.trim())
+          .filter(folder => folder.length > 0);
       }
       if (newSettings.extensions.storage !== undefined && Array.isArray(newSettings.extensions.storage)) {
         runtimeSettings.extensions.storage = newSettings.extensions.storage
@@ -2852,65 +2927,80 @@ app.post('/api/list-yaml-files', async (req, res) => {
   }
 });
 
-
-
-
-// File watcher for auto-commit (will be initialized in initRepo)
-// Use a Map to track debounce timers per file
-const debounceTimers = new Map();
-let watcher = null;
-const externalWatchers = [];
-
 function shouldIgnoreWatchPath(filePath) {
+  if (!filePath) return true;
+
+  // Normalize path separators to forward slashes for consistent matching
+  const normalizedPath = filePath.replace(/\\/g, '/');
+
   // Ignore if path contains these directories (but not .storage for lovelace files)
-  if (/(\/|^)\.(git|hg|svn|ssh|docker|ssl|keys|certs|node_modules)(\/|$)/.test(filePath)) {
+  if (/(\/|^)\.(git|hg|svn|ssh|docker|ssl|keys|certs|node_modules)(\/|$)/.test(normalizedPath)) {
     return true;
   }
 
   // Ignore .storage files unless explicitly configured via include_storage
-  if (filePath.includes('/.storage/') && !isConfiguredStorageAbsolutePath(filePath)) {
+  if (normalizedPath.includes('/.storage/') && !isConfiguredStorageAbsolutePath(filePath)) {
     return true;
   }
 
   // Ignore database files and related files (very frequent writes)
-  if (/\.(db|db-wal|db-shm|db-journal)$/.test(filePath)) {
+  if (/\.(db|db-wal|db-shm|db-journal)$/.test(normalizedPath)) {
     return true;
   }
 
   // Ignore log files
-  if (/\.log(\.\d+)?$/.test(filePath) || filePath.includes('/log/')) {
+  if (/\.log(\.\d+)?$/.test(normalizedPath) || normalizedPath.includes('/log/')) {
     return true;
   }
 
   // Ignore common binary and temporary files
-  if (/\.(pyc|pyo|tmp|temp|bak|swp|swo)$/.test(filePath)) {
+  if (/\.(pyc|pyo|tmp|temp|bak|swp|swo)$/.test(normalizedPath)) {
     return true;
   }
 
   // Ignore zigbee2mqtt runtime files (state.json, database.db, logs)
-  if (filePath.includes('/zigbee2mqtt/') &&
-    (filePath.includes('/log/') || filePath.endsWith('state.json') || filePath.endsWith('database.db'))) {
+  if (normalizedPath.includes('/zigbee2mqtt/') &&
+    (normalizedPath.includes('/log/') || normalizedPath.endsWith('state.json') || normalizedPath.endsWith('database.db'))) {
     return true;
   }
 
   // Handle user-configured exclusions (#29)
-  if (runtimeSettings.extensions.exclude && runtimeSettings.extensions.exclude.length > 0) {
-    // Convert absolute path to relative for prefix matching
-    const relativePath = filePath.startsWith(CONFIG_PATH)
-      ? filePath.substring(CONFIG_PATH.length).replace(/^[\\\/]/, '')
-      : filePath;
+  const hasExclusions = (runtimeSettings.extensions.exclude && runtimeSettings.extensions.exclude.length > 0) || 
+                        (runtimeSettings.extensions.excludeFolders && runtimeSettings.extensions.excludeFolders.length > 0);
 
-    for (const excludePath of runtimeSettings.extensions.exclude) {
-      // Handle directory prefixes (e.g. "www/") or exact matches
-      const normalizedExclude = excludePath.replace(/[\\\/]$/, '');
-      if (relativePath === normalizedExclude || relativePath.startsWith(normalizedExclude + '/') || relativePath.startsWith(normalizedExclude + '\\')) {
-        return true;
+  if (hasExclusions) {
+    // Convert absolute path to relative for prefix matching
+    // Make sure we only match if it starts with CONFIG_PATH followed by a slash
+    let relativePath = normalizedPath;
+    if (normalizedPath === CONFIG_PATH) {
+      relativePath = '';
+    } else if (normalizedPath.startsWith(CONFIG_PATH + '/')) {
+      relativePath = normalizedPath.substring(CONFIG_PATH.length + 1);
+    }
+
+    // Check exclude files/patterns
+    if (runtimeSettings.extensions.exclude) {
+      for (const excludePath of runtimeSettings.extensions.exclude) {
+        const normalizedExclude = excludePath.replace(/\\/g, '/').replace(/\/$/, '');
+        if (relativePath === normalizedExclude || relativePath.startsWith(normalizedExclude + '/')) {
+          return true;
+        }
+      }
+    }
+
+    // Check exclude folders
+    if (runtimeSettings.extensions.excludeFolders) {
+      for (const excludeFolder of runtimeSettings.extensions.excludeFolders) {
+        const normalizedExclude = excludeFolder.replace(/\\/g, '/').replace(/\/$/, '');
+        if (relativePath === normalizedExclude || relativePath.startsWith(normalizedExclude + '/')) {
+          return true;
+        }
       }
     }
   }
 
-  // Avoid infinite loops - if path has too many repetitions of /config/
-  const configCount = (filePath.match(/\/config\//g) || []).length;
+  // Final safety check: deep path limit to prevent infinite loops from circular symlinks
+  const configCount = (normalizedPath.match(/\/config\//g) || []).length;
   if (configCount > 3) {
     return true;
   }
@@ -2919,19 +3009,17 @@ function shouldIgnoreWatchPath(filePath) {
 }
 
 function initializeWatcher() {
-  console.log(`[init] Setting up file watcher for: ${CONFIG_PATH}/**/*`);
+  console.log(`[init] Initializing file watcher for: ${CONFIG_PATH}`);
 
-  // Watch all files - let git's .gitignore handle filtering
-  const watchPattern = `${CONFIG_PATH}/**/*`;
-
-  watcher = chokidar.watch(watchPattern, {
+  // Watch directory directly - let shouldIgnoreWatchPath handle filtering
+  watcher = chokidar.watch(CONFIG_PATH, {
     persistent: true,
     ignoreInitial: true,
     depth: 15,
     followSymlinks: false,
-    usePolling: true,
-    interval: 2000,
-    binaryInterval: 2000,
+    usePolling: runtimeSettings.watcherUsePolling,
+    interval: runtimeSettings.watcherInterval,
+    binaryInterval: runtimeSettings.watcherInterval,
     awaitWriteFinish: {
       stabilityThreshold: 2000,
       pollInterval: 100
@@ -3133,15 +3221,15 @@ async function initializeExternalWatchers() {
       continue;
     }
 
-    console.log(`[external-sync] Watching additional path: ${additionalPath}/**/*`);
-    const externalWatcher = chokidar.watch(`${additionalPath}/**/*`, {
+    console.log(`[external-sync] Watching additional path: ${additionalPath}`);
+    const externalWatcher = chokidar.watch(additionalPath, {
       persistent: true,
       ignoreInitial: true,
       depth: 15,
       followSymlinks: false,
-      usePolling: true,
-      interval: 2000,
-      binaryInterval: 2000,
+      usePolling: runtimeSettings.watcherUsePolling,
+      interval: runtimeSettings.watcherInterval,
+      binaryInterval: runtimeSettings.watcherInterval,
       awaitWriteFinish: {
         stabilityThreshold: 2000,
         pollInterval: 100

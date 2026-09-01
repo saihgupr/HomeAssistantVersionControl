@@ -2643,6 +2643,10 @@ function navigateToDetail() {
   }
 }
 
+function getRestoreButtonText() {
+  return window.innerWidth <= 768 ? t('files.restore_button') : t('timeline.restore_commit');
+}
+
 function initMobileInteractions() {
   // Close modals on overlay backdrop click (if clicking outside modal body)
   document.querySelectorAll('.modal-overlay').forEach(overlay => {
@@ -3500,7 +3504,7 @@ async function displayCommitDiff(status, hash, diff, commitDate = null) {
         ontouchstart="handleRestoreButtonDown('${hash}', '${compareHash}')"
         ontouchend="handleRestoreButtonUp('${hash}', '${compareHash}')"
         ontouchcancel="handleRestoreButtonCancel()">
-        <span id="restore-btn-text">${t('timeline.restore_commit')}</span>
+        <span id="restore-btn-text">${getRestoreButtonText()}</span>
       </button>
     `;
   } else {
@@ -4230,7 +4234,7 @@ async function showAutomationHistory(automationId) {
       if (isFirstVersion) {
         isFirstVersion = false;
         document.getElementById('rightPanelTitle').textContent = auto ? auto.name : 'Automation';
-        document.getElementById('rightPanelActions').innerHTML = `<button class="btn restore" onclick="restoreAutomationVersion('${automationId}')" title="${t('diff.tooltip_overwrite_automation')}">${t('timeline.restore_commit')}</button>`;
+        document.getElementById('rightPanelActions').innerHTML = `<button class="btn restore" onclick="restoreAutomationVersion('${automationId}')" title="${t('diff.tooltip_overwrite_automation')}">${getRestoreButtonText()}</button>`;
         displayAutomationHistory();
       } else {
         // Update the navigation controls for subsequent versions
@@ -4399,7 +4403,7 @@ async function loadAutomationHistoryDiff() {
   });
 
   if ((diffHtml) || (currentSelection && currentSelection.type === 'deleted_automation')) {
-    document.getElementById('rightPanelActions').innerHTML = `<button class="btn restore" onclick="restoreAutomationVersion('${escapeHtml(currentSelection.id)}')" title="${t('diff.tooltip_overwrite_automation')}">${t('timeline.restore_commit')}</button>`;
+    document.getElementById('rightPanelActions').innerHTML = `<button class="btn restore" onclick="restoreAutomationVersion('${escapeHtml(currentSelection.id)}')" title="${t('diff.tooltip_overwrite_automation')}">${getRestoreButtonText()}</button>`;
   } else {
     document.getElementById('rightPanelActions').innerHTML = '';
   }
@@ -4591,7 +4595,7 @@ async function showScriptHistory(scriptId) {
       if (isFirstVersion) {
         isFirstVersion = false;
         document.getElementById('rightPanelTitle').textContent = script ? script.name : 'Script';
-        document.getElementById('rightPanelActions').innerHTML = `<button class="btn restore" onclick="restoreScriptVersion('${scriptId}')" title="${t('diff.tooltip_overwrite_script')}">${t('timeline.restore_commit')}</button>`;
+        document.getElementById('rightPanelActions').innerHTML = `<button class="btn restore" onclick="restoreScriptVersion('${scriptId}')" title="${t('diff.tooltip_overwrite_script')}">${getRestoreButtonText()}</button>`;
         displayScriptHistory();
       } else {
         // Update the navigation controls for subsequent versions
@@ -4755,7 +4759,7 @@ async function loadScriptHistoryDiff() {
   });
 
   if ((diffHtml) || (currentSelection && currentSelection.type === 'deleted_script')) {
-    document.getElementById('rightPanelActions').innerHTML = `<button class="btn restore" onclick="restoreScriptVersion('${escapeHtml(currentSelection.id)}')" title="${t('diff.tooltip_overwrite_script')}">${t('timeline.restore_commit')}</button>`;
+    document.getElementById('rightPanelActions').innerHTML = `<button class="btn restore" onclick="restoreScriptVersion('${escapeHtml(currentSelection.id)}')" title="${t('diff.tooltip_overwrite_script')}">${getRestoreButtonText()}</button>`;
   } else {
     document.getElementById('rightPanelActions').innerHTML = '';
   }
@@ -5126,7 +5130,7 @@ async function loadFileHistoryDiff(filePath) {
   // Show restore button if there are changes (regardless of comparison mode) or if it's a deleted file
   const isDeletedFile = currentSelection && currentSelection.type === 'deleted_file';
   if ((diffHtml && !isNewlyAdded) || isDeletedFile) {
-    document.getElementById('rightPanelActions').innerHTML = `<button class="btn restore" onclick="restoreFileVersion('${escapeHtml(filePath)}')" title="${t('diff.tooltip_overwrite_file')}">${t('timeline.restore_commit')}</button>`;
+    document.getElementById('rightPanelActions').innerHTML = `<button class="btn restore" onclick="restoreFileVersion('${escapeHtml(filePath)}')" title="${t('diff.tooltip_overwrite_file')}">${getRestoreButtonText()}</button>`;
   } else {
     document.getElementById('rightPanelActions').innerHTML = '';
   }
@@ -6687,7 +6691,7 @@ function resetRestoreButtonState() {
 
   const textEl = document.getElementById('restore-btn-text');
   if (textEl && textEl.textContent === 'RESET ALL FILES') {
-    textEl.textContent = t('timeline.restore_commit');
+    textEl.textContent = getRestoreButtonText();
   }
 }
 

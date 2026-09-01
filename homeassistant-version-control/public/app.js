@@ -1360,35 +1360,54 @@ function closeSettings() {
   const settingsModal = document.getElementById('settingsModal');
   if (settingsModal) settingsModal.classList.remove('active');
 
+  // Auto-save any pending changes silently
+  saveSettings(false);
+
   // Restore current mode tab in mobile tab bar
   document.querySelectorAll('.mobile-tab-item').forEach(t => t.classList.remove('active'));
   const activeTab = document.getElementById(`mobile${currentMode.charAt(0).toUpperCase() + currentMode.slice(1)}Tab`);
   if (activeTab) activeTab.classList.add('active');
 }
 
-async function saveSettings() {
+let autoSaveSettingsTimer = null;
+function triggerAutoSaveSettings() {
+  clearTimeout(autoSaveSettingsTimer);
+  autoSaveSettingsTimer = setTimeout(() => {
+    saveSettings(false);
+  }, 350);
+}
+
+async function saveSettings(closeOnSave = true) {
   // Get settings values
-  const darkMode = document.getElementById('themeDark').checked;
-  const debounceTime = document.getElementById('debounceTime').value;
-  const debounceTimeUnit = document.getElementById('debounceTimeUnit').value;
+  const darkMode = document.getElementById('themeDark') ? document.getElementById('themeDark').checked : true;
+  const debounceTimeEl = document.getElementById('debounceTime');
+  const debounceTimeUnitEl = document.getElementById('debounceTimeUnit');
+  const retentionValueEl = document.getElementById('retentionValue');
+  const retentionUnitEl = document.getElementById('retentionUnit');
+  const historyRetentionEl = document.getElementById('historyRetention');
+  const limitHistoryEl = document.getElementById('limitHistory');
+  const maxCommitsEl = document.getElementById('maxCommits');
+  const autoSaveEl = document.getElementById('autoSave');
 
+  const debounceTime = debounceTimeEl ? debounceTimeEl.value : '3';
+  const debounceTimeUnit = debounceTimeUnitEl ? debounceTimeUnitEl.value : 'seconds';
   const retentionType = 'time'; // Hardcoded as UI option removed
-  const retentionValue = document.getElementById('retentionValue').value;
-  const retentionUnit = document.getElementById('retentionUnit').value;
-  const historyRetention = document.getElementById('historyRetention').checked;
-  const limitHistory = document.getElementById('limitHistory').checked;
-  const maxCommits = parseInt(document.getElementById('maxCommits').value);
-  const manualMode = !document.getElementById('autoSave').checked;
+  const retentionValue = retentionValueEl ? retentionValueEl.value : '30';
+  const retentionUnit = retentionUnitEl ? retentionUnitEl.value : 'days';
+  const historyRetention = historyRetentionEl ? historyRetentionEl.checked : false;
+  const limitHistory = limitHistoryEl ? limitHistoryEl.checked : false;
+  const maxCommits = maxCommitsEl ? parseInt(maxCommitsEl.value) : 50;
+  const manualMode = autoSaveEl ? !autoSaveEl.checked : false;
 
-  const diffViewSplit = document.getElementById('diffViewSplit').checked;
+  const diffViewSplit = document.getElementById('diffViewSplit') ? document.getElementById('diffViewSplit').checked : false;
   const newDiffViewFormat = diffViewSplit ? 'split' : 'unified';
-  const newDiffStyle = document.getElementById('diffStyle').value;
+  const diffStyleEl = document.getElementById('diffStyle');
+  const newDiffStyle = diffStyleEl ? diffStyleEl.value : currentDiffStyle;
 
   // Save to localStorage
   localStorage.setItem('darkMode', darkMode);
   localStorage.setItem('debounceTime', debounceTime);
   localStorage.setItem('debounceTimeUnit', debounceTimeUnit);
-
   localStorage.setItem('retentionType', retentionType);
   localStorage.setItem('retentionValue', retentionValue);
   localStorage.setItem('retentionUnit', retentionUnit);
@@ -1427,14 +1446,13 @@ async function saveSettings() {
 
     if (response.ok) {
       console.log('Settings saved to server');
-      // showNotification(t('app.settings_saved'), 'success', 1500);
     } else {
       console.error('Failed to save settings to server');
-      showNotification(t('app.settings_save_error'), 'error', 3000);
+      if (closeOnSave) showNotification(t('app.settings_save_error'), 'error', 3000);
     }
   } catch (error) {
     console.error('Error saving settings to server:', error);
-    showNotification(t('app.settings_save_error_generic'), 'error', 3000);
+    if (closeOnSave) showNotification(t('app.settings_save_error_generic'), 'error', 3000);
   }
 
   // Save cloud sync settings
@@ -1452,11 +1470,13 @@ async function saveSettings() {
     console.error('Error refreshing view:', e);
   }
 
-  // Settings saved - close modal
-  try {
-    closeSettings();
-  } catch (e) {
-    console.error('Error closing settings modal:', e);
+  // Settings saved - close modal if requested
+  if (closeOnSave) {
+    try {
+      closeSettings();
+    } catch (e) {
+      console.error('Error closing settings modal:', e);
+    }
   }
 
   // Update UI state based on new settings
@@ -2694,6 +2714,17 @@ function initMobileInteractions() {
       }
     });
   });
+
+  // Auto-save settings on any input or select change
+  const settingsModal = document.getElementById('settingsModal');
+  if (settingsModal) {
+    settingsModal.querySelectorAll('input, select').forEach(input => {
+      input.addEventListener('change', () => triggerAutoSaveSettings());
+      if (input.type === 'number' || input.type === 'text') {
+        input.addEventListener('input', () => triggerAutoSaveSettings());
+      }
+    });
+  }
 }
 
 async function switchMode(mode) {

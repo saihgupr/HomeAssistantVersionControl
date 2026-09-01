@@ -2696,6 +2696,12 @@ async function switchMode(mode) {
   currentMode = mode;
   currentSelection = null;
 
+  // Close settings if open
+  const settingsModal = document.getElementById('settingsModal');
+  if (settingsModal && settingsModal.classList.contains('active')) {
+    settingsModal.classList.remove('active');
+  }
+
   // Reset mobile detail view back to master
   navigateBackToMaster(false);
 

@@ -2967,9 +2967,90 @@ body:not(.dark-mode) .mobile-tab-bar {
     justify-content: center;
   }
 
-  .settings-modal {
+  /* Full-panel normal window style for Settings on mobile (matching other tabs) */
+  .modal-overlay#settingsModal {
+    position: absolute;
+    top: max(8px, env(safe-area-inset-top, 8px));
+    left: max(8px, env(safe-area-inset-left, 8px));
+    right: max(8px, env(safe-area-inset-right, 8px));
+    bottom: calc(62px + env(safe-area-inset-bottom, 0px));
+    padding: 0;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    z-index: 100;
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  .modal-overlay#settingsModal.active {
+    display: flex;
+  }
+
+  .modal-overlay#settingsModal .modal.settings-modal {
+    width: 100% !important;
     max-width: 100% !important;
-    max-height: 90vh !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    margin: 0;
+    border-radius: var(--radius-lg);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    box-shadow: none;
+    transform: none !important;
+    padding-bottom: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #settingsModal .sheet-drag-handle {
+    display: none !important;
+  }
+
+  #settingsModal .modal-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: transparent;
+  }
+
+  #settingsModal .modal-title {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  #settingsModal .modal-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  #settingsModal .modal-content {
+    padding: 16px;
+    flex: 1;
+    overflow-y: auto;
+    max-height: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #settingsModal .modal-footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    gap: 10px;
+    background: transparent;
   }
 
   /* Unified Mobile Diff View */

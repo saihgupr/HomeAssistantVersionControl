@@ -32,14 +32,11 @@
   <div id="confettiContainer" class="confetti-container"></div>
   <div class="container" id="appContainer">
     <div class="header">
-      <div style="display: flex; align-items: center; gap: clamp(10px, 1.5vw, 14px); cursor: pointer;"
-        onclick="cyclePicassoPalette()">
-        <img src="images/icon.png" alt="Logo"
-          style="width: clamp(36px, 5vw, 48px); height: clamp(36px, 5vw, 48px); border-radius: 6px;">
-        <div style="margin-top: -4px;">
+      <div class="header-branding" onclick="cyclePicassoPalette()">
+        <img class="header-logo" src="images/icon.png" alt="Logo">
+        <div class="header-titles">
           <div class="title" data-i18n="app.title">Home Assistant Version Control</div>
-          <div style="color: var(--text-tertiary); font-size: 14px; margin-top: -12px;" data-i18n="app.subtitle">Browse
-            and restore backups like magic.</div>
+          <div class="subtitle" data-i18n="app.subtitle">Browse and restore backups like magic.</div>
         </div>
       </div>
       <div class="header-actions">

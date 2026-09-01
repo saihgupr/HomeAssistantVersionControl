@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.4.1]
+
+### Fixed & Improved
+- UI fixes and refinements for responsive mobile layout.
+
 ## [1.3.0]
 
 ### Added

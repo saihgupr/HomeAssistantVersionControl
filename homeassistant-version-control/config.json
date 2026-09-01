@@ -1,6 +1,6 @@
 {
   "name": "Home Assistant Version Control",
-  "version": "1.3.0",
+  "version": "1.4.1",
   "slug": "home-assistant-version-control",
   "description": "Git-powered version control and automated backup for your Home Assistant configuration files.",
   "url": "https://github.com/saihgupr/HomeAssistantVersionControl",

@@ -2664,7 +2664,8 @@ function navigateToDetail() {
 }
 
 function getRestoreButtonText() {
-  return window.innerWidth <= 768 ? t('files.restore_button') : t('timeline.restore_commit');
+  const translated = t('timeline.restore_commit');
+  return translated && translated !== 'timeline.restore_commit' ? translated : 'Restore This Version';
 }
 
 function initMobileInteractions() {

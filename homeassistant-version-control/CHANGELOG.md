@@ -3,13 +3,26 @@
 ## [1.3.0]
 
 ### Added
+- **Native iOS HIG Mobile & Tablet Experience:**
+  - Added modern responsive layout tailored for mobile devices and tablets.
+  - Added glassmorphic bottom navigation tab bar for fast switching between History, Files, Automations, Scripts, and Settings on mobile.
+  - Built smooth master-detail sliding view controller with mobile back navigation (`‹ Back`).
+  - Added 44px+ touch-friendly target sizing with active feedback states and safe-area inset support (`env(safe-area-inset-*)`).
+  - Modal action sheets with swipe-to-dismiss gesture handles for diff and preview dialogs.
+- **Real-Time Settings Auto-Save:**
+  - Full automatic real-time saving across all settings controls (toggles, debounce timers, retention values, max commits, themes, diff preferences, and cloud sync) on both mobile and desktop.
+  - Removed redundant "Save Settings" / "Close" footer buttons on mobile.
 - **SSH Key Authentication & Remote Support:** Full support for custom SSH keys loaded from `/config/.ssh` for Git operations over SSH with Gitea, GitLab, GitHub, and custom servers.
 - **GitLab Integration Guide:** Added setup documentation for GitLab private repositories and Access Tokens.
 - **UI Customizations:** Configurable arrow direction for commit/push visual indicators, timeline item spacing fixes, and sort dropdown fixes.
 - **Flush Repository Tool:** Conveniently reset local Git repository state directly from the settings interface.
 - **Environment Variables:** Support for custom environment variables like `CONFIG_PATH`.
 
-### Fixed
+### Fixed & Improved
+- **Edge-to-Edge Mobile Layout:** Removed outer floating window borders and padding on mobile viewports (`<= 768px`) to maximize horizontal and vertical usable space.
+- **Mobile Header Streamlining:** Removed redundant top branding header bar on mobile to integrate seamlessly with Home Assistant's top bar.
+- **Compact Mobile Action Buttons:** Streamlined "Restore This Version" button text to "Restore" on mobile viewports for clean single-line header alignment.
+- **Mobile Settings Window:** Rendered Settings as a full-page standard window matching all other tabs instead of an inset floating sheet.
 - **Ignore Rules in Manual Commits:** Fixed `add-all-and-commit` endpoint to strictly respect `.gitignore` rules and custom file/folder exclusions.
 - **Watcher Exclusions & Performance:** Improved file watcher path normalization and unwatching logic to significantly reduce memory and CPU overhead.
 - **UI Header Cleanups:** Removed static version badges from header and startup logs for consistent display.

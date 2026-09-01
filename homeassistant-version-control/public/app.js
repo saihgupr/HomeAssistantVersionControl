@@ -461,6 +461,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Initialize Confetti Mode from localStorage
   initConfettiMode();
 
+  // Initialize mobile interactions and gestures
+  initMobileInteractions();
+
   // Initialize the view
   switchMode(currentMode);
 });
@@ -1332,8 +1335,12 @@ async function loadExtensionsSettings() {
 // Settings modal functions
 function openSettings() {
   const settingsModal = document.getElementById('settingsModal');
+  if (settingsModal) settingsModal.classList.add('active');
 
-  document.getElementById('settingsModal').classList.add('active');
+  // Highlight settings tab in mobile tab bar
+  document.querySelectorAll('.mobile-tab-item').forEach(t => t.classList.remove('active'));
+  const mobileSettingsTab = document.getElementById('mobileSettingsTab');
+  if (mobileSettingsTab) mobileSettingsTab.classList.add('active');
 
   // Load cloud sync settings when modal opens
   loadCloudSyncSettings();
@@ -1350,7 +1357,13 @@ function openSettings() {
 }
 
 function closeSettings() {
-  document.getElementById('settingsModal').classList.remove('active');
+  const settingsModal = document.getElementById('settingsModal');
+  if (settingsModal) settingsModal.classList.remove('active');
+
+  // Restore current mode tab in mobile tab bar
+  document.querySelectorAll('.mobile-tab-item').forEach(t => t.classList.remove('active'));
+  const activeTab = document.getElementById(`mobile${currentMode.charAt(0).toUpperCase() + currentMode.slice(1)}Tab`);
+  if (activeTab) activeTab.classList.add('active');
 }
 
 async function saveSettings() {
@@ -2560,6 +2573,7 @@ function filterScripts(query) {
 }
 
 function navigateToPath(path) {
+  navigateBackToMaster(false);
   // Navigate to a folder path
   if (!path) {
     // Go back to root
@@ -2615,16 +2629,88 @@ function sortItems(items, sortType) {
   }
 }
 
+function navigateBackToMaster(smooth = true) {
+  const mainContent = document.getElementById('mainContent');
+  if (mainContent) {
+    mainContent.classList.remove('mobile-detail-active');
+  }
+}
+
+function navigateToDetail() {
+  const mainContent = document.getElementById('mainContent');
+  if (mainContent && window.innerWidth <= 768) {
+    mainContent.classList.add('mobile-detail-active');
+  }
+}
+
+function initMobileInteractions() {
+  // Close modals on overlay backdrop click (if clicking outside modal body)
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        if (overlay.id === 'diffModal') closeModal();
+        else if (overlay.id === 'restorePreviewModal') closeRestorePreview();
+        else if (overlay.id === 'settingsModal') closeSettings();
+        else overlay.classList.remove('active');
+      }
+    });
+  });
+
+  // Touch drag-down on sheet handle to close action sheet
+  document.querySelectorAll('.sheet-drag-handle').forEach(handle => {
+    let startY = 0;
+    let currentY = 0;
+    const modal = handle.closest('.modal');
+    if (!modal) return;
+
+    handle.addEventListener('touchstart', (e) => {
+      startY = e.touches[0].clientY;
+      currentY = startY;
+    }, { passive: true });
+
+    handle.addEventListener('touchmove', (e) => {
+      currentY = e.touches[0].clientY;
+      const deltaY = currentY - startY;
+      if (deltaY > 0) {
+        modal.style.transform = `translateY(${deltaY}px)`;
+      }
+    }, { passive: true });
+
+    handle.addEventListener('touchend', () => {
+      const deltaY = currentY - startY;
+      modal.style.transform = '';
+      if (deltaY > 60) {
+        const overlay = modal.closest('.modal-overlay');
+        if (overlay) {
+          if (overlay.id === 'diffModal') closeModal();
+          else if (overlay.id === 'restorePreviewModal') closeRestorePreview();
+          else if (overlay.id === 'settingsModal') closeSettings();
+          else overlay.classList.remove('active');
+        }
+      }
+    });
+  });
+}
+
 async function switchMode(mode) {
   currentMode = mode;
   currentSelection = null;
 
+  // Reset mobile detail view back to master
+  navigateBackToMaster(false);
+
   // Hide the floating button when switching modes
   hideFloatingConfirmRestoreButton();
 
-  // Update tabs
+  // Update desktop tabs
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.getElementById(`${mode}Tab`).classList.add('active');
+  const desktopTab = document.getElementById(`${mode}Tab`);
+  if (desktopTab) desktopTab.classList.add('active');
+
+  // Update mobile bottom tab bar
+  document.querySelectorAll('.mobile-tab-item').forEach(t => t.classList.remove('active'));
+  const activeMobileTab = document.getElementById(`mobile${mode.charAt(0).toUpperCase() + mode.slice(1)}Tab`);
+  if (activeMobileTab) activeMobileTab.classList.add('active');
 
   // Update panel title and show/hide sort controls
   const leftPanelTitle = document.getElementById('leftPanelTitle');
@@ -3035,6 +3121,7 @@ function toggleDateGroup(bucket) {
 }
 
 async function showCommit(hash) {
+  navigateToDetail();
   document.querySelectorAll('.commit').forEach(c => c.classList.remove('selected'));
   const element = document.getElementById('commit-' + hash);
   if (element) {
@@ -3788,6 +3875,7 @@ function displayFileList(files) {
 }
 
 async function showFileHistory(filePath) {
+  navigateToDetail();
   document.querySelectorAll('.file').forEach(f => f.classList.remove('selected'));
 
   let fileId;
@@ -4017,6 +4105,7 @@ function displayAutomations(automations) {
 }
 
 async function showAutomationHistory(automationId) {
+  navigateToDetail();
   document.querySelectorAll('.file').forEach(f => f.classList.remove('selected'));
 
   let autoId;
@@ -4377,6 +4466,7 @@ function displayScripts(scripts) {
 }
 
 async function showScriptHistory(scriptId) {
+  navigateToDetail();
   document.querySelectorAll('.file').forEach(f => f.classList.remove('selected'));
 
   let scriptElId;

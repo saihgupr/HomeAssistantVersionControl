@@ -2675,9 +2675,9 @@ body:not(.dark-mode) .mobile-tab-bar {
 }
 
 /* ==========================================================================
-   TABLET BREAKPOINT (768px – 1024px)
+   TABLET BREAKPOINT (769px – 1024px)
    ========================================================================== */
-@media (min-width: 768px) and (max-width: 1024px) {
+@media (min-width: 769px) and (max-width: 1024px) {
   body {
     padding: max(16px, env(safe-area-inset-top, 16px)) max(16px, env(safe-area-inset-right, 16px)) max(16px, env(safe-area-inset-bottom, 16px)) max(16px, env(safe-area-inset-left, 16px));
   }
@@ -2711,9 +2711,9 @@ body:not(.dark-mode) .mobile-tab-bar {
 }
 
 /* ==========================================================================
-   MOBILE BREAKPOINT (< 768px) - iOS Native HIG Experience
+   MOBILE BREAKPOINT (<= 768px) - iOS Native HIG Experience
    ========================================================================== */
-@media (max-width: 767px) {
+@media (max-width: 768px) {
   body {
     padding: max(8px, env(safe-area-inset-top, 8px)) max(10px, env(safe-area-inset-right, 10px)) calc(64px + env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 10px));
     height: 100vh;
@@ -2729,6 +2729,12 @@ body:not(.dark-mode) .mobile-tab-bar {
   /* Hide Desktop Top Header on Mobile (HA Ingress has its own header and Settings is in bottom tab bar) */
   .header {
     display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    visibility: hidden !important;
+    border: none !important;
   }
 
   /* Hide Desktop Top Tabs on Mobile */

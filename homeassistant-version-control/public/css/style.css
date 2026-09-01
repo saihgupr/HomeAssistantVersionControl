@@ -3024,17 +3024,7 @@ body:not(.dark-mode) .mobile-tab-bar {
   }
 
   #settingsModal .modal-close {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-subtle);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    color: var(--text-secondary);
-    cursor: pointer;
+    display: none !important;
   }
 
   #settingsModal .modal-content {

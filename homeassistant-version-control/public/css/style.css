@@ -3077,6 +3077,28 @@ body:not(.dark-mode) .mobile-tab-bar {
     font-size: 11px;
   }
 
+  /* Compact inline restore button responsiveness */
+  .btn.restore,
+  #restore-commit-btn,
+  #rightPanelActions .btn,
+  #rightPanelActions button,
+  .file .btn.restore {
+    min-width: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    padding: 6px 14px !important;
+    font-size: 13px !important;
+    min-height: 34px !important;
+    height: 34px !important;
+    line-height: 1 !important;
+    border-radius: var(--radius-sm) !important;
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+    box-sizing: border-box !important;
+    align-self: center !important;
+    display: inline-flex !important;
+  }
+
   /* Floating and inline restore button responsiveness */
   .floating-confirm-restore-btn {
     bottom: calc(64px + env(safe-area-inset-bottom, 0px));

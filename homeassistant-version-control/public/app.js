@@ -2664,6 +2664,10 @@ function navigateToDetail() {
 }
 
 function getRestoreButtonText() {
+  const isMobile = window.innerWidth <= 768 || (document.documentElement && document.documentElement.clientWidth <= 768);
+  if (isMobile) {
+    return t('files.restore_button') || 'Restore';
+  }
   const translated = t('timeline.restore_commit');
   return translated && translated !== 'timeline.restore_commit' ? translated : 'Restore This Version';
 }

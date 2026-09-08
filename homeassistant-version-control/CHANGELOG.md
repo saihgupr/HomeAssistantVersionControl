@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed & Improved
+- Prevent cloud sync push frequency from resetting when opening settings.
+
 ## [1.4.1]
 
 ### Fixed & Improved

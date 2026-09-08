@@ -1674,9 +1674,9 @@ async function loadCloudSyncSettings() {
       if (providerGithub && providerCustom) {
         providerGithub.checked = isGithub;
         providerCustom.checked = !isGithub;
-        // Trigger UI update
+        // Trigger UI update without saving over existing settings
         if (typeof handleCloudProviderChange === 'function') {
-          handleCloudProviderChange();
+          handleCloudProviderChange(false);
         }
       }
 
@@ -7003,7 +7003,7 @@ function triggerConfetti() {
 }
 
 
-async function handleCloudProviderChange() {
+async function handleCloudProviderChange(save = true) {
   const isGithub = document.getElementById('cloudProviderGithub').checked;
   const githubSection = document.getElementById('githubConfigSection');
   const customSection = document.getElementById('customConfigSection');
@@ -7063,7 +7063,9 @@ async function handleCloudProviderChange() {
 
   // Auto-save settings when provider changes (silent - no notification)
   // This ensures Push Now immediately uses the new provider
-  await saveCloudSyncSettings(true);
+  if (save) {
+    await saveCloudSyncSettings(true);
+  }
 }
 
 // ============================

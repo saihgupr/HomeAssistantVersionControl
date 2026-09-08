@@ -4272,10 +4272,36 @@ async function setupGitRemote(url, token) {
 
     // Check if origin remote exists
     try {
-      await gitExec(['remote', 'get-url', 'origin']);
-      // Remote exists, update it
-      await gitExec(['remote', 'set-url', 'origin', authenticatedUrl]);
-      console.log('[cloud-sync] Updated existing remote origin');
+      const { stdout: currentRemoteRaw } = await gitExec(['remote', 'get-url', 'origin']);
+      const currentRemote = (currentRemoteRaw || '').trim();
+
+      // Check if current remote is already an SSH URL
+      const isSshRemote = currentRemote.startsWith('git@') || currentRemote.startsWith('ssh://');
+      if (isSshRemote) {
+        // Robust helper to compare repo slug between HTTPS and SSH URLs
+        const parseRepoSlug = (u) => {
+          if (!u) return '';
+          let clean = u.trim().replace(/\.git$/, '');
+          clean = clean.replace(/^(https?:\/\/|ssh:\/\/|git:\/\/)/, '');
+          clean = clean.replace(/^[^@]+@/, '');
+          clean = clean.replace(/^[^/:]+(?::\d+)?[:/]/, '');
+          return clean.toLowerCase();
+        };
+
+        const currentRepo = parseRepoSlug(currentRemote);
+        const targetRepo = parseRepoSlug(authenticatedUrl);
+
+        if (currentRepo && targetRepo && currentRepo === targetRepo) {
+          console.log(`[cloud-sync] Preserving manually configured SSH remote (${currentRemote}) matching target (${targetRepo})`);
+          return { success: true };
+        }
+      }
+
+      // Remote exists, update it if different
+      if (currentRemote !== authenticatedUrl) {
+        await gitExec(['remote', 'set-url', 'origin', authenticatedUrl]);
+        console.log('[cloud-sync] Updated existing remote origin');
+      }
     } catch (e) {
       // Remote doesn't exist, add it
       await gitExec(['remote', 'add', 'origin', authenticatedUrl]);

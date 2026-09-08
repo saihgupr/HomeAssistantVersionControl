@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed & Improved
+- Preserve existing SSH git remote URLs and deploy keys instead of overwriting them with HTTPS token URLs.
+
 ## [1.4.1]
 
 ### Fixed & Improved

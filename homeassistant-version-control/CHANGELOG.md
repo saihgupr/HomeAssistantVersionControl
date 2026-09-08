@@ -1,8 +1,9 @@
 # Changelog
 
-## [Unreleased]
+## [1.4.2-beta.1]
 
 ### Fixed & Improved
+- Fixed ReferenceError in `restoreScript` when restoring historical script versions.
 - Prevent cloud sync push frequency from resetting when opening settings.
 - Preserve existing SSH git remote URLs and deploy keys instead of overwriting them with HTTPS token URLs.
 

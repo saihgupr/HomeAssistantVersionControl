@@ -4,6 +4,7 @@
 
 ### Fixed & Improved
 - Prevent cloud sync push frequency from resetting when opening settings.
+- Preserve existing SSH git remote URLs and deploy keys instead of overwriting them with HTTPS token URLs.
 
 ## [1.4.1]
 

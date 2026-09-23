@@ -70,7 +70,7 @@ const app = express();
 const PORT = process.env.PORT || 54001;
 const HOST = process.env.HOST || '::';
 const EXTERNAL_MIRROR_DIR = '.havc_external';
-const ALLOWED_ADDITIONAL_PATH_PREFIXES = ['/share', '/media', '/ssl', '/config'];
+const ALLOWED_ADDITIONAL_PATH_PREFIXES = ['/share', '/media', '/ssl', '/config', '/addon_configs'];
 
 // Ensure HOME is set for git & SSH compatibility
 if (!process.env.HOME) {

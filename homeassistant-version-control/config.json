@@ -27,7 +27,8 @@
     "config:rw",
     "share:rw",
     "media:rw",
-    "ssl"
+    "ssl",
+    "all_addon_configs:rw"
   ],
   "environment": {
     "CONFIG_PATH": "/config"

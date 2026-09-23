@@ -178,7 +178,7 @@ additional_paths:
 ```
 
 Notes:
-- Paths must be absolute and currently support `/share`, `/media`, `/ssl`, and `/config` prefixes.
+- Paths must be absolute and currently support `/share`, `/media`, `/ssl`, `/config`, and `/addon_configs` prefixes.
 - Paths under `/config` are skipped because `/config` is already tracked automatically.
 - Files and folders are filtered by `include_extensions`, `exclude_files` (or `exclude`), and `exclude_folders`.
 - For `.conf` files, add `conf` to `include_extensions`.

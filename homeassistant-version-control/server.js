@@ -475,6 +475,17 @@ const RUNTIME_SETTINGS_SCHEMA = {
 };
 
 /**
+ * Guard for operations that assume HAVC owns the repository: rewriting .gitignore,
+ * managing the origin remote, pushing. In manual mode the repository belongs to the
+ * user, so call this before any such mutation instead of checking the flag inline.
+ */
+function assertAutoManaged(operation) {
+  if (runtimeSettings.manualMode) {
+    throw new Error(`${operation} is disabled in manual mode`);
+  }
+}
+
+/**
  * Parse and validate an environment variable value based on schema
  */
 function parseEnvVarValue(key, schema, rawValue) {
@@ -1419,9 +1430,6 @@ async function initRepo() {
   // Load runtime settings first
   await loadRuntimeSettings();
 
-  // Configure git (respects manualMode loaded in loadRuntimeSettings)
-  configureGitIdentity();
-
   try {
     // Determine CONFIG_PATH
     CONFIG_PATH = process.env.CONFIG_PATH;
@@ -1524,6 +1532,8 @@ async function initRepo() {
       // Ignore if file doesn't exist
     }
 
+    // Configure git only now: manual_mode may come from options.json above
+    configureGitIdentity();
 
     // Synchronize format options with final extensions configuration
     const include = runtimeSettings.extensions.include || [];
@@ -1738,7 +1748,7 @@ async function initRepo() {
     }
 
     // Apply pending remote update from config
-    if (global.pendingRemoteUpdate && runtimeSettings.cloudSync.remoteUrl) {
+    if (global.pendingRemoteUpdate && runtimeSettings.cloudSync.remoteUrl && !runtimeSettings.manualMode) {
       console.log(`[init] Applying pending remote URL update: ${runtimeSettings.cloudSync.remoteUrl}`);
       const remoteResult = await setupGitRemote(runtimeSettings.cloudSync.remoteUrl, runtimeSettings.cloudSync.authToken);
       if (remoteResult.success) {
@@ -1810,6 +1820,10 @@ app.post('/api/runtime-settings', async (req, res) => {
 
     if (newSettings.manualMode !== undefined) {
       runtimeSettings.manualMode = !!newSettings.manualMode;
+      // Before init completes, startup applies the mode itself
+      if (gitInitialized) {
+        await applyWatcherMode();
+      }
     }
 
     if (newSettings.legacyArrowDirection !== undefined) {
@@ -1879,66 +1893,64 @@ app.post('/api/runtime-settings', async (req, res) => {
       const newExclude = runtimeSettings.extensions.exclude || [];
       const newlyExcluded = newExclude.filter(file => !oldExclude.includes(file));
 
-      // Regenerate .gitignore with new extensions
-      try {
-        const gitignorePath = path.join(CONFIG_PATH, '.gitignore');
-        const newContent = generateGitignoreContent(IGNORED_NESTED_REPOS, runtimeSettings.extensions);
-        await fsPromises.writeFile(gitignorePath, newContent, 'utf8');
-        console.log('[settings] Updated .gitignore with new extensions');
-
-        const externalSyncStats = await syncAllAdditionalPathsToMirror();
-        if (externalSyncStats.paths > 0) {
-          console.log(`[external-sync] Re-synced additional paths after extension update: copied=${externalSyncStats.copied}, removed=${externalSyncStats.removed}`);
-        }
-
-        // Handle untracking files when settings change
-        let removedAny = false;
-
-        // 1. Automatically untrack files that were just added to the exclude list
-        if (newlyExcluded.length > 0) {
-          console.log(`[settings] Newly excluded files detected: ${newlyExcluded.join(', ')}`);
-          for (const file of newlyExcluded) {
-            // Unwatch if the watcher is active to save resources
-            if (watcher && typeof watcher.unwatch === 'function') {
-              const fullPathToUnwatch = path.isAbsolute(file) ? file : path.join(CONFIG_PATH, file);
-              watcher.unwatch(fullPathToUnwatch);
-              console.log(`[settings] Unwatching newly excluded path: ${fullPathToUnwatch}`);
-            }
-
-            const removed = await gitRmCached(file);
-            if (removed) {
-              console.log(`[settings] Successfully untracked newly excluded file: ${file}`);
-              removedAny = true;
-            }
-          }
-        }
-
-        // 2. Also cleanup tracked .storage files that are no longer in the allowed list
+      // In manual mode .gitignore and the index belong to the user
+      if (runtimeSettings.manualMode) {
+        console.log('[settings] Manual mode active: leaving .gitignore and tracked files untouched');
+      } else {
+        // Regenerate .gitignore with new extensions
         try {
-          const trackedStorageFiles = (await gitRaw(['ls-files', '.storage/'])).trim().split('\n').filter(Boolean);
-          for (const file of trackedStorageFiles) {
-            if (!isConfiguredStorageRepoPath(file)) {
-              console.log(`[settings] Untracking .storage file no longer in allowed list: ${file}`);
+          const gitignorePath = path.join(CONFIG_PATH, '.gitignore');
+          const newContent = generateGitignoreContent(IGNORED_NESTED_REPOS, runtimeSettings.extensions);
+          await fsPromises.writeFile(gitignorePath, newContent, 'utf8');
+          console.log('[settings] Updated .gitignore with new extensions');
+
+          const externalSyncStats = await syncAllAdditionalPathsToMirror();
+          if (externalSyncStats.paths > 0) {
+            console.log(`[external-sync] Re-synced additional paths after extension update: copied=${externalSyncStats.copied}, removed=${externalSyncStats.removed}`);
+          }
+
+          // 1. Automatically untrack files that were just added to the exclude list
+          if (newlyExcluded.length > 0) {
+            console.log(`[settings] Newly excluded files detected: ${newlyExcluded.join(', ')}`);
+            for (const file of newlyExcluded) {
+              // Unwatch if the watcher is active to save resources
+              if (watcher && typeof watcher.unwatch === 'function') {
+                const fullPathToUnwatch = path.isAbsolute(file) ? file : path.join(CONFIG_PATH, file);
+                watcher.unwatch(fullPathToUnwatch);
+                console.log(`[settings] Unwatching newly excluded path: ${fullPathToUnwatch}`);
+              }
+
               const removed = await gitRmCached(file);
               if (removed) {
-                removedAny = true;
-                // Unwatch as well
-                if (watcher && typeof watcher.unwatch === 'function') {
-                  const fullPathToUnwatch = path.join(CONFIG_PATH, file);
-                  watcher.unwatch(fullPathToUnwatch);
-                }
+                console.log(`[settings] Successfully untracked newly excluded file: ${file}`);
               }
             }
           }
-        } catch (storageError) {
-          // No .storage files or git error - if it's "not a git repository" etc, but here we assume it is
-          if (!storageError.message.includes('not a git repository')) {
-            console.log('[settings] Checked .storage for cleanup:', storageError.message);
-          }
-        }
 
-        // 3. Commit cleanup changes and .gitignore update
-        if (removedAny || true) { // Always commit if .gitignore changed (which it did at line 1721)
+          // 2. Also cleanup tracked .storage files that are no longer in the allowed list
+          try {
+            const trackedStorageFiles = (await gitRaw(['ls-files', '.storage/'])).trim().split('\n').filter(Boolean);
+            for (const file of trackedStorageFiles) {
+              if (!isConfiguredStorageRepoPath(file)) {
+                console.log(`[settings] Untracking .storage file no longer in allowed list: ${file}`);
+                const removed = await gitRmCached(file);
+                if (removed) {
+                  // Unwatch as well
+                  if (watcher && typeof watcher.unwatch === 'function') {
+                    const fullPathToUnwatch = path.join(CONFIG_PATH, file);
+                    watcher.unwatch(fullPathToUnwatch);
+                  }
+                }
+              }
+            }
+          } catch (storageError) {
+            // No .storage files or git error - if it's "not a git repository" etc, but here we assume it is
+            if (!storageError.message.includes('not a git repository')) {
+              console.log('[settings] Checked .storage for cleanup:', storageError.message);
+            }
+          }
+
+          // 3. Commit cleanup changes and .gitignore update (no-op when nothing changed)
           try {
             await gitAdd('.gitignore');
             const msg = newlyExcluded.length > 0 ?
@@ -1954,9 +1966,9 @@ app.post('/api/runtime-settings', async (req, res) => {
           } catch (e) {
             console.log('[settings] No changes to commit after update:', e.message);
           }
+        } catch (error) {
+          console.error('[settings] Failed to update .gitignore or untrack files:', error);
         }
-      } catch (error) {
-        console.error('[settings] Failed to update .gitignore or untrack files:', error);
       }
     }
 
@@ -3191,7 +3203,7 @@ async function handleExternalWatcherEvent(filePath, eventType) {
   }
 }
 
-async function initializeExternalWatchers() {
+async function closeExternalWatchers() {
   while (externalWatchers.length > 0) {
     const existingWatcher = externalWatchers.pop();
     try {
@@ -3200,6 +3212,41 @@ async function initializeExternalWatchers() {
       // Ignore close errors
     }
   }
+}
+
+async function stopWatchers() {
+  for (const timer of debounceTimers.values()) {
+    clearTimeout(timer);
+  }
+  debounceTimers.clear();
+
+  if (watcher) {
+    await watcher.close();
+    watcher = null;
+    console.log('[watcher] File watcher stopped');
+  }
+  await closeExternalWatchers();
+}
+
+/**
+ * Run the auto-commit watchers only outside manual mode. Idempotent, so it serves both
+ * startup and runtime toggles of the setting.
+ */
+async function applyWatcherMode() {
+  if (runtimeSettings.manualMode) {
+    await stopWatchers();
+    return;
+  }
+  if (watcher) return;
+
+  initializeWatcher();
+  await initializeExternalWatchers().catch((error) => {
+    console.error('[external-sync] Failed to initialize external watchers:', error);
+  });
+}
+
+async function initializeExternalWatchers() {
+  await closeExternalWatchers();
 
   if (!additionalTrackedPaths.length) {
     return;
@@ -3983,15 +4030,11 @@ const server = app.listen(PORT, HOST, (err) => {
 
   // Run initialization in background to avoid blocking server startup
   initRepo()
-    .then(() => {
-      if (!runtimeSettings.manualMode) {
-        initializeWatcher();
-        initializeExternalWatchers().catch((error) => {
-          console.error('[external-sync] Failed to initialize external watchers:', error);
-        });
-      } else {
+    .then(async () => {
+      if (runtimeSettings.manualMode) {
         console.log('[init] Manual mode active: skipping file watcher initialization');
       }
+      await applyWatcherMode();
 
       // Start cloud sync scheduler (check every hour)
       startCloudSyncScheduler();
@@ -4010,8 +4053,8 @@ function startCloudSyncScheduler() {
     try {
       const settings = runtimeSettings.cloudSync;
 
-      // Skip if not enabled or manual mode
-      if (!settings.enabled || !settings.remoteUrl || settings.pushFrequency === 'manual' || settings.pushFrequency === 'every_commit') {
+      // Skip if not enabled, push frequency is 'manual', or HAVC is in manual mode
+      if (runtimeSettings.manualMode || !settings.enabled || !settings.remoteUrl || settings.pushFrequency === 'manual' || settings.pushFrequency === 'every_commit') {
         return;
       }
 
@@ -4251,6 +4294,7 @@ app.post('/api/script/:id/restore', async (req, res) => {
  * @returns {Object} Result with success status
  */
 async function setupGitRemote(url, token) {
+  assertAutoManaged('Configuring the git remote');
   try {
     let authenticatedUrl = url;
 
@@ -4321,6 +4365,7 @@ async function setupGitRemote(url, token) {
  * @param {boolean} include - Whether to include secrets.yaml
  */
 async function configureSecretsTracking(include) {
+  assertAutoManaged('Managing .gitignore for cloud sync');
   const secretsPath = 'secrets.yaml';
   const gitignorePath = path.join(CONFIG_PATH, '.gitignore');
 
@@ -4417,6 +4462,7 @@ async function configureSecretsTracking(include) {
  * @returns {Object} Result with success status
  */
 async function pushToRemote(includeSecrets = false) {
+  assertAutoManaged('Cloud sync push');
   try {
     // Configure secrets tracking before pushing
     await configureSecretsTracking(includeSecrets);
@@ -4464,7 +4510,7 @@ async function pushToRemote(includeSecrets = false) {
  * Triggers cloud sync push if pushFrequency is set to 'every_commit'
  */
 async function triggerAutoPushIfConfigured() {
-  if (!runtimeSettings.cloudSync.enabled || runtimeSettings.cloudSync.pushFrequency !== 'every_commit') {
+  if (runtimeSettings.manualMode || !runtimeSettings.cloudSync.enabled || runtimeSettings.cloudSync.pushFrequency !== 'every_commit') {
     return;
   }
 
@@ -4671,13 +4717,18 @@ app.post('/api/github/disconnect', async (req, res) => {
     runtimeSettings.cloudSync.lastPushError = null;
     await saveRuntimeSettings();
 
-    // Also remove the git remote to clear any embedded tokens
-    try {
-      await gitExec(['remote', 'remove', 'origin']);
-      console.log('[github] Removed git remote origin');
-    } catch (e) {
-      // Remote might not exist, that's okay
-      console.log('[github] No git remote to remove');
+    // Also remove the git remote to clear any embedded tokens.
+    // In manual mode origin is the user's own remote, which HAVC never set up.
+    if (runtimeSettings.manualMode) {
+      console.log('[github] Manual mode active: leaving git remote origin untouched');
+    } else {
+      try {
+        await gitExec(['remote', 'remove', 'origin']);
+        console.log('[github] Removed git remote origin');
+      } catch (e) {
+        // Remote might not exist, that's okay
+        console.log('[github] No git remote to remove');
+      }
     }
 
     console.log('[github] Disconnected and cleared all cloud sync settings');
@@ -4708,6 +4759,8 @@ app.post('/api/git/flush', async (req, res) => {
  * Helper to ensure a GitHub repository exists and runtimeSettings.cloudSync.remoteUrl is configured
  */
 async function ensureGitHubRepository(repoName = 'VersionControlBackup') {
+  // Checked up front so no GitHub repo is created that setupGitRemote would then refuse
+  assertAutoManaged('Creating a GitHub backup repository');
   const token = runtimeSettings.cloudSync.authToken;
   if (!token) {
     return { success: false, error: 'Not authenticated with GitHub' };

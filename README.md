@@ -186,6 +186,13 @@ Notes:
 - Files are still filtered by `include_extensions` and `exclude_files`.
 - For `.conf` files, add `conf` to `include_extensions`.
 
+#### Manual mode (existing git repositories)
+
+Set `manual_mode: true` if `/config` is already a git repository you manage yourself. The option is read before HAVC touches the repository, so it applies from the very first start, and when set it takes precedence over the toggle in the settings UI:
+- No file watcher, no automatic or startup commits. You commit with the "Backup Now" button.
+- `.gitignore`, the index and the global git identity are left untouched, including when you save settings.
+- Cloud sync is disabled; HAVC never changes or pushes to your `origin` remote.
+
 Example use case:
 
 ### Tracking Remote Shares (NAS/Network Storage)

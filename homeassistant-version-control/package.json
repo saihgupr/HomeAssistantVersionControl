@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "echo \"No tests specified\" && exit 0",
+    "test": "node --test tests/manual-mode.test.mjs",
     "lint": "echo \"No linter specified\" && exit 0"
   },
   "keywords": [

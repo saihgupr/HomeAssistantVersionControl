@@ -25,6 +25,7 @@
   },
   "map": [
     "config:rw",
+    "all_addon_configs:rw",
     "share:rw",
     "media:rw",
     "ssl"

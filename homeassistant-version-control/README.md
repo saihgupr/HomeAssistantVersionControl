@@ -183,6 +183,13 @@ Notes:
 - Files and folders are filtered by `include_extensions`, `exclude_files` (or `exclude`), and `exclude_folders`.
 - For `.conf` files, add `conf` to `include_extensions`.
 
+#### Manual mode (existing git repositories)
+
+Set `manual_mode: true` if `/config` is already a git repository you manage yourself. The option is read before HAVC touches the repository, so it applies from the very first start, and when set it takes precedence over the toggle in the settings UI:
+- No file watcher, no automatic or startup commits. You commit with the "Backup Now" button.
+- `.gitignore`, the index and the global git identity are left untouched, including when you save settings.
+- Cloud sync is disabled; HAVC never changes or pushes to your `origin` remote.
+
 ### Exclusions
 
 You can exclude specific files or entire folders from being watched and version controlled. This is highly recommended for directories with frequent changes (like logs or temporary files) to reduce CPU usage.
@@ -276,6 +283,7 @@ For containerized deployments (especially when not persisting the `/data` direct
 | `ADDITIONAL_PATHS` | Additional Watch Paths | List | Comma-separated (e.g. `/share,/media`) | `[]` |
 | `WATCHER_USE_POLLING` | Use Polling for Watcher | Boolean | `true`, `false`, `yes`, `no`, `1`, `0` | `true` |
 | `WATCHER_INTERVAL` | Watcher Polling Interval | Number | ≥ 100 (milliseconds) | `2000` |
+| `MANUAL_MODE` | Manual Mode (no auto-commits, repo left untouched) | Boolean | `true`, `false`, `yes`, `no`, `1`, `0` | `false` |
 
 **Notes:**
 - Boolean values are case-insensitive and accept: `true`/`false`, `yes`/`no`, `1`/`0`

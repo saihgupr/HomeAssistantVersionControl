@@ -69,6 +69,7 @@
     ],
     "remote_url": "str?",
     "legacy_arrow_direction": "bool",
+    "manual_mode": "bool?",
     "exclude": [
       "str"
     ],

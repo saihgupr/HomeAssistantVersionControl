@@ -70,7 +70,7 @@ const app = express();
 const PORT = process.env.PORT || 54001;
 const HOST = process.env.HOST || '::';
 const EXTERNAL_MIRROR_DIR = '.havc_external';
-const ALLOWED_ADDITIONAL_PATH_PREFIXES = ['/share', '/media', '/ssl', '/config'];
+const ALLOWED_ADDITIONAL_PATH_PREFIXES = ['/share', '/media', '/ssl', '/config', '/addon_configs'];
 
 // Ensure HOME is set for git & SSH compatibility
 if (!process.env.HOME) {
@@ -109,6 +109,14 @@ function configureGitIdentity() {
     console.log('[init] Git configured: safe.directory and defaultBranch set');
   } catch (e) {
     console.error('[init] Failed to configure git:', e.message);
+  }
+}
+
+function assertAutoManaged(operation) {
+  if (runtimeSettings.manualMode) {
+    const error = new Error(`${operation} is disabled in manual mode`);
+    error.statusCode = 403;
+    throw error;
   }
 }
 
@@ -2624,6 +2632,7 @@ app.post('/api/restore-commit', async (req, res) => {
 // Hard reset to a specific commit (resets ALL files, not just changed ones)
 app.post('/api/git/hard-reset', async (req, res) => {
   try {
+    assertAutoManaged('Hard reset');
     const { commitHash, createBackup } = req.body;
 
     if (!commitHash) {
@@ -2752,13 +2761,14 @@ app.post('/api/git/hard-reset', async (req, res) => {
 
   } catch (error) {
     console.error('[hard-reset] Error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(error.statusCode || 500).json({ success: false, error: error.message });
   }
 });
 
 // Soft reset to a specific commit (removes commits from history but keeps files unchanged)
 app.post('/api/git/soft-reset', async (req, res) => {
   try {
+    assertAutoManaged('Soft reset');
     const { commitHash } = req.body;
 
     if (!commitHash) {
@@ -2852,7 +2862,7 @@ app.post('/api/git/soft-reset', async (req, res) => {
 
   } catch (error) {
     console.error('[soft-reset] Error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(error.statusCode || 500).json({ success: false, error: error.message });
   }
 });
 
@@ -3262,6 +3272,7 @@ app.get('/api/health', (req, res) => {
 // Advanced retention cleanup with custom parameters
 app.post('/api/retention/cleanup', async (req, res) => {
   try {
+    assertAutoManaged('Retention cleanup');
     console.log('[api] Advanced retention cleanup triggered with options:', req.body);
 
     // Validate options
@@ -3284,6 +3295,7 @@ app.post('/api/retention/cleanup', async (req, res) => {
 // Manual retention cleanup
 app.post('/api/run-retention', async (req, res) => {
   try {
+    assertAutoManaged('Retention cleanup');
     console.log('[api] Manual retention cleanup triggered');
     // Run cleanup in background to avoid timeout
     runRetentionCleanup(true).catch(err => console.error('[api] Background cleanup failed:', err));
@@ -3299,6 +3311,10 @@ app.post('/api/run-retention', async (req, res) => {
  * @param {boolean} force - Force cleanup even if disabled in settings
  */
 async function runRetentionCleanup(force = false) {
+  if (runtimeSettings.manualMode) {
+    console.log('[retention] Skipping cleanup because manual mode is active');
+    return;
+  }
   if (!runtimeSettings.historyRetention && !force) {
     return; // Retention is disabled and not forced
   }
@@ -3869,6 +3885,7 @@ app.post('/api/retention/preview', async (req, res) => {
 // API endpoint: Execute cleanup
 app.post('/api/retention/cleanup', async (req, res) => {
   try {
+    assertAutoManaged('Retention cleanup');
     const { months, weeks, days, hours, minutes, seconds } = req.body;
 
     // Validate that at least one time unit is provided
@@ -4691,6 +4708,7 @@ app.post('/api/github/disconnect', async (req, res) => {
 // Flush repository (git gc)
 app.post('/api/git/flush', async (req, res) => {
   try {
+    assertAutoManaged('Repository flush');
     console.log('[git] Manual flush requested...');
     // Expire reflog first to make objects unreachable
     await gitRaw(['reflog', 'expire', '--expire=now', '--all']);
@@ -4700,7 +4718,7 @@ app.post('/api/git/flush', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('[git] Flush failed:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(error.statusCode || 500).json({ success: false, error: error.message });
   }
 });
 

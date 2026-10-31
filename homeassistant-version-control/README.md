@@ -187,6 +187,7 @@ Notes:
 
 Set `manual_mode: true` if `/config` is already a git repository you manage yourself. The option is read before HAVC touches the repository, so it applies from the very first start, and when set it takes precedence over the toggle in the settings UI:
 - No file watcher, no automatic or startup commits. You commit with the "Backup Now" button.
+- "Backup Now" commits every change your `.gitignore` allows, like `git add -A`: deletions and files of any type included. `exclude_files` and `exclude_folders` are never committed.
 - `.gitignore`, the index and the global git identity are left untouched, including when you save settings.
 - Cloud sync is disabled; HAVC never changes or pushes to your `origin` remote.
 

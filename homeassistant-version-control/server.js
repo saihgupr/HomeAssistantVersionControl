@@ -2918,13 +2918,15 @@ app.post('/api/git/commit-manual', async (req, res) => {
   try {
     const { message } = req.body;
     
-    // Add all files - this respects .gitignore
-    await gitAdd('.');
+    if (runtimeSettings.manualMode) {
+      await stageAllForManualBackup();
+    } else {
+      await gitAdd('.');
+    }
     
-    // Check status to see if there are changes
-    const status = await gitStatus();
-    
-    if (status.isClean()) {
+    // Check status to see if there are staged changes
+    const hasStaged = (await gitRaw(['diff', '--cached', '--name-only'])).trim() !== '';
+    if (!hasStaged) {
       return res.json({ 
         success: true, 
         message: 'No changes to backup',
@@ -2933,7 +2935,7 @@ app.post('/api/git/commit-manual', async (req, res) => {
     }
     
     // Use provided message or generate one
-    const commitMessage = message || 'Manual mode control';
+    const commitMessage = message || (runtimeSettings.manualMode ? 'Manual commit: Add all config files and stage changes' : 'Manual mode control');
     
     await gitCommit(commitMessage);
     
@@ -4338,6 +4340,23 @@ app.post('/api/script/:id/restore', async (req, res) => {
 // =====================================
 
 /**
+ * Clear any existing git http.*.extraHeader configurations
+ */
+async function clearGitHttpAuthHeaders() {
+  try {
+    const { stdout: existing } = await gitExec(['config', '--get-regexp', '^http\\..*\\.extraheader$']);
+    for (const line of (existing || '').split('\n')) {
+      const key = line.trim().split(/\s+/)[0];
+      if (key) {
+        await gitExec(['config', '--unset-all', key]).catch(() => {});
+      }
+    }
+  } catch (e) {
+    // Non-zero exit code means no matching keys found
+  }
+}
+
+/**
  * Set up or update the git remote for cloud sync
  * @param {string} url - Remote repository URL
  * @param {string} token - Authentication token
@@ -4346,23 +4365,22 @@ app.post('/api/script/:id/restore', async (req, res) => {
 async function setupGitRemote(url, token) {
   assertAutoManaged('Configuring the git remote');
   try {
-    let authenticatedUrl = url;
+    let cleanUrl = (url || '').trim();
 
-    // Check if URL already has credentials embedded (user@host pattern)
-    const hasEmbeddedAuth = url.match(/:\/\/[^@]+@/);
+    // Strip any previously embedded credentials from url
+    cleanUrl = cleanUrl.replace(/:\/\/[^@]+@/, '://');
 
-    if (!hasEmbeddedAuth && token) {
-      // Insert token into URL for HTTPS or HTTP URLs
-      if (url.startsWith('https://')) {
-        authenticatedUrl = url.replace('https://', `https://${token}@`);
-      } else if (url.startsWith('http://')) {
-        authenticatedUrl = url.replace('http://', `http://${token}@`);
-      }
-    }
+    // Robust helper to compare repo slug between HTTPS and SSH URLs
+    const parseRepoSlug = (u) => {
+      if (!u) return '';
+      let clean = u.trim().replace(/\.git$/, '');
+      clean = clean.replace(/^(https?:\/\/|ssh:\/\/|git:\/\/)/, '');
+      clean = clean.replace(/^[^@]+@/, '');
+      clean = clean.replace(/^[^/:]+(?::\d+)?[:/]/, '');
+      return clean.toLowerCase();
+    };
 
-    // Log the URL being used (mask any token for security)
-    const maskedUrl = authenticatedUrl.replace(/:\/\/([^@]+)@/, '://***@');
-    console.log('[cloud-sync] Setting up remote with URL:', maskedUrl);
+    const isSsh = cleanUrl.startsWith('git@') || cleanUrl.startsWith('ssh://');
 
     // Check if origin remote exists
     try {
@@ -4370,20 +4388,10 @@ async function setupGitRemote(url, token) {
       const currentRemote = (currentRemoteRaw || '').trim();
 
       // Check if current remote is already an SSH URL
-      const isSshRemote = currentRemote.startsWith('git@') || currentRemote.startsWith('ssh://');
-      if (isSshRemote) {
-        // Robust helper to compare repo slug between HTTPS and SSH URLs
-        const parseRepoSlug = (u) => {
-          if (!u) return '';
-          let clean = u.trim().replace(/\.git$/, '');
-          clean = clean.replace(/^(https?:\/\/|ssh:\/\/|git:\/\/)/, '');
-          clean = clean.replace(/^[^@]+@/, '');
-          clean = clean.replace(/^[^/:]+(?::\d+)?[:/]/, '');
-          return clean.toLowerCase();
-        };
-
+      const isCurrentSsh = currentRemote.startsWith('git@') || currentRemote.startsWith('ssh://');
+      if (isCurrentSsh) {
         const currentRepo = parseRepoSlug(currentRemote);
-        const targetRepo = parseRepoSlug(authenticatedUrl);
+        const targetRepo = parseRepoSlug(cleanUrl);
 
         if (currentRepo && targetRepo && currentRepo === targetRepo) {
           console.log(`[cloud-sync] Preserving manually configured SSH remote (${currentRemote}) matching target (${targetRepo})`);
@@ -4392,14 +4400,34 @@ async function setupGitRemote(url, token) {
       }
 
       // Remote exists, update it if different
-      if (currentRemote !== authenticatedUrl) {
-        await gitExec(['remote', 'set-url', 'origin', authenticatedUrl]);
+      if (currentRemote !== cleanUrl) {
+        await gitExec(['remote', 'set-url', 'origin', cleanUrl]);
         console.log('[cloud-sync] Updated existing remote origin');
       }
     } catch (e) {
       // Remote doesn't exist, add it
-      await gitExec(['remote', 'add', 'origin', authenticatedUrl]);
+      await gitExec(['remote', 'add', 'origin', cleanUrl]);
       console.log('[cloud-sync] Added new remote origin');
+    }
+
+    // Configure credentials via http.extraHeader to avoid leaking tokens in .git/config
+    // and to prevent Git 2.54+ / curl 8.x false-redirect credential stripping bugs
+    if (!isSsh && (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://'))) {
+      await clearGitHttpAuthHeaders();
+
+      if (token) {
+        const credentials = token.includes(':') ? token : `${token}:`;
+        const base64Auth = Buffer.from(credentials).toString('base64');
+        const configKey = `http.${cleanUrl}.extraHeader`;
+        await gitExec(['config', configKey, `Authorization: Basic ${base64Auth}`]);
+
+        // Also configure without .git suffix if cleanUrl ends with .git (for subpath matching)
+        if (cleanUrl.endsWith('.git')) {
+          const stripped = cleanUrl.slice(0, -4);
+          await gitExec(['config', `http.${stripped}.extraHeader`, `Authorization: Basic ${base64Auth}`]);
+        }
+        console.log('[cloud-sync] Configured git extraHeader authentication');
+      }
     }
 
     return { success: true };
@@ -4779,6 +4807,7 @@ app.post('/api/github/disconnect', async (req, res) => {
         // Remote might not exist, that's okay
         console.log('[github] No git remote to remove');
       }
+      await clearGitHttpAuthHeaders();
     }
 
     console.log('[github] Disconnected and cleared all cloud sync settings');

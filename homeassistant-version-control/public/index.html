@@ -735,6 +735,54 @@
                 </label>
               </div>
 
+              <!-- Mirror Remote Section (Secondary Backup Target) -->
+              <div class="setting-item" style="margin-bottom: 20px; border-top: 1px solid var(--border-subtle); padding-top: 16px;">
+                <label style="display: block; margin-bottom: 8px;">
+                  <span style="color: var(--text-primary); font-size: 14px;"
+                    data-i18n="settings.cloud_mirror_url">Mirror Remote URL (Optional)</span>
+                </label>
+                <input type="text" id="cloudMirrorUrl" placeholder="https://git.example.com/user/backup.git" onchange="saveCloudSyncSettings(true)" style="
+                  width: 100%;
+                  padding: 10px 12px;
+                  background: var(--bg-tertiary);
+                  border: 1px solid var(--border-subtle);
+                  border-radius: var(--radius-md);
+                  color: var(--text-primary);
+                  font-size: 14px;
+                  box-sizing: border-box;
+                  margin-bottom: 8px;
+                ">
+                <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                  <input type="password" id="cloudMirrorAuthToken" placeholder="Personal access token (optional)" onchange="saveCloudSyncSettings(true)" style="
+                    flex: 1;
+                    padding: 10px 12px;
+                    background: var(--bg-tertiary);
+                    border: 1px solid var(--border-subtle);
+                    border-radius: var(--radius-md);
+                    color: var(--text-primary);
+                    font-size: 14px;
+                    box-sizing: border-box;
+                  ">
+                  <button class="btn" onclick="testMirrorConnection()" style="background: var(--bg-tertiary); border: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: center; gap: 6px; padding: 0 14px; white-space: nowrap;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="4"></circle>
+                      <line x1="1.05" y1="12" x2="7" y2="12"></line>
+                      <line x1="17.01" y1="12" x2="22.96" y2="12"></line>
+                    </svg>
+                    <span data-i18n="settings.cloud_mirror_test">Test</span>
+                  </button>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 12px; margin-top: 2px; margin-bottom: 6px; margin-left: 2px;"
+                  data-i18n="settings.cloud_mirror_url_desc">
+                  Secondary push target for redundant backups or drift detection. Push failures are non-fatal.
+                </p>
+                <p id="cloudMirrorStatus" style="color: var(--text-secondary); font-size: 12px; margin-top: 4px; margin-bottom: 0; display: none;">
+                  <span data-i18n="settings.cloud_mirror_last_push">Last mirror push:</span>
+                  <span id="cloudMirrorLastPushTime">Never</span>
+                  <span id="cloudMirrorLastPushStatus"></span>
+                </p>
+              </div>
+
               <!-- Push to Cloud - styled as inline setting item -->
               <div class="setting-item" style="display: flex; justify-content: space-between; align-items: center;">
                 <div>

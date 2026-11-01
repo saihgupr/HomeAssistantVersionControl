@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.5.0]
+
+### Added
+- **Addon Configs Tracking (`/addon_configs`):** Full support for mapping, tracking, and versioning Home Assistant addon configuration files alongside your main HA config.
+- **Manual Mode Repository Protection:** Protects user-managed Git repositories in Manual Mode by preventing automatic branch overwrites, stash resets, or forced syncs, giving power users complete control over their repos.
+- **Comprehensive Manual Backup Staging:** "Backup Now" in Manual Mode stages all tracked modifications and newly created files while strictly respecting `.gitignore` rules and exclusion lists.
+- **Continuous Integration (CI):** Added automated GitHub Actions test workflow running on Node 24 to guarantee stability across releases.
+
+### Fixed & Improved
+- **Cloud Sync Authentication Stability:** Switched to standard Git `http.extraHeader` authorization headers to fix authentication dropping caused by Git 2.54 / libcurl 8 URL normalization.
+- **SSH Remote Preservation:** Preserves existing custom SSH git remotes and deploy keys without forcing HTTPS token URLs.
+- **Push Frequency State:** Fixed an issue where the cloud sync push frequency selection would reset when opening settings.
+- **Script History Restoration:** Fixed a `ReferenceError` in `restoreScript` when restoring older script revisions.
+- **Startup Stability:** Resolved duplicate function declaration in server startup handlers.
+- **Mobile & Tablet Refinements:** Streamlined mobile layout, action buttons, and responsive view transitions.
+
 ## [1.4.2-beta.1]
 
 ### Fixed & Improved

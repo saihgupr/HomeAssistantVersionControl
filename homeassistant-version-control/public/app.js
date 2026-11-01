@@ -1354,6 +1354,9 @@ function openSettings() {
     autoSaveCheckbox.checked = localStorage.getItem('manualMode') !== 'true';
     handleAutoSaveToggle();
   }
+
+  // Initialize Confetti Mode checkbox from localStorage
+  initConfettiMode();
 }
 
 function closeSettings() {
@@ -1417,6 +1420,11 @@ async function saveSettings(closeOnSave = true) {
   localStorage.setItem('manualMode', manualMode);
   localStorage.setItem('diffViewFormat', newDiffViewFormat);
   localStorage.setItem('diffStyle', newDiffStyle);
+
+  const confettiCheckbox = document.getElementById('confettiMode');
+  if (confettiCheckbox) {
+    localStorage.setItem('confettiModeEnabled', confettiCheckbox.checked ? 'true' : 'false');
+  }
 
   // Update the global variables
   diffViewFormat = newDiffViewFormat;
@@ -6851,24 +6859,22 @@ function stepInput(id, step) {
 }
 
 // ========================================
-// CONFETTI MODE FUNCTIONS
+// CONFETTI MODE FUNCTIONS (Volumetric 3D Canvas Celebration Engine)
 // ========================================
-
 
 // Toggle Confetti Mode preference (saves to localStorage only; no visual effect on toggle)
 function toggleConfettiMode() {
   const checkbox = document.getElementById('confettiMode');
-  // onclick fires before checkbox toggles, so check the OPPOSITE
-  const willBeEnabled = !checkbox.checked;
-  localStorage.setItem('confettiModeEnabled', willBeEnabled ? 'true' : 'false');
+  if (!checkbox) return;
+  localStorage.setItem('confettiModeEnabled', checkbox.checked ? 'true' : 'false');
 }
 
 // Initialize Confetti Mode from localStorage (defaults to off)
 function initConfettiMode() {
   const saved = localStorage.getItem('confettiModeEnabled');
   const checkbox = document.getElementById('confettiMode');
-  if (checkbox && saved === 'true') {
-    checkbox.checked = true;
+  if (checkbox) {
+    checkbox.checked = saved === 'true';
   }
 }
 
@@ -6877,128 +6883,336 @@ function isConfettiModeEnabled() {
   return localStorage.getItem('confettiModeEnabled') === 'true';
 }
 
+// State for the canvas confetti engine
+let confettiParticles = [];
+let confettiAnimationId = null;
+let confettiCanvas = null;
+let confettiCtx = null;
+let confettiResizeHandler = null;
+
+const CONFETTI_PALETTE = [
+  { color: '#ff4757', isMetallic: false }, // Vivid crimson/coral
+  { color: '#2ed573', isMetallic: false }, // Bright emerald
+  { color: '#ffa502', isMetallic: false }, // Marigold orange
+  { color: '#9b59b6', isMetallic: false }, // Royal amethyst
+  { color: '#ff6b81', isMetallic: false }, // Hot pink
+  { color: '#1e90ff', isMetallic: false }, // Electric azure
+  { color: '#2bcbba', isMetallic: false }, // Turquoise
+  { color: '#ffd700', isMetallic: true  }, // Metallic gold foil
+  { color: '#f6e58d', isMetallic: true  }, // Champagne foil
+  { color: '#e056fd', isMetallic: false }, // Neon magenta
+  { color: '#f1c40f', isMetallic: false }, // Sunburst yellow
+  { color: '#e2e8f0', isMetallic: true  }  // Platinum silver foil
+];
+
+function getConfettiBackfaceColor(hex) {
+  try {
+    const clean = hex.replace('#', '');
+    const num = parseInt(clean, 16);
+    const r = Math.max(0, ((num >> 16) & 255) * 0.78 | 0);
+    const g = Math.max(0, ((num >> 8) & 255) * 0.78 | 0);
+    const b = Math.max(0, (num & 255) * 0.78 | 0);
+    return `rgb(${r}, ${g}, ${b})`;
+  } catch (e) {
+    return hex;
+  }
+}
+
+function getOrCreateConfettiCanvas() {
+  const container = document.getElementById('confettiContainer');
+  if (!container) return null;
+
+  if (!confettiCanvas) {
+    confettiCanvas = document.createElement('canvas');
+    confettiCanvas.style.position = 'fixed';
+    confettiCanvas.style.top = '0';
+    confettiCanvas.style.left = '0';
+    confettiCanvas.style.width = '100%';
+    confettiCanvas.style.height = '100%';
+    confettiCanvas.style.pointerEvents = 'none';
+    confettiCanvas.style.zIndex = '9999';
+    container.appendChild(confettiCanvas);
+
+    confettiResizeHandler = () => {
+      if (!confettiCanvas) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      confettiCanvas.width = Math.floor(window.innerWidth * dpr);
+      confettiCanvas.height = Math.floor(window.innerHeight * dpr);
+      if (confettiCtx) {
+        confettiCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+    };
+    window.addEventListener('resize', confettiResizeHandler);
+  }
+
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  confettiCanvas.width = Math.floor(window.innerWidth * dpr);
+  confettiCanvas.height = Math.floor(window.innerHeight * dpr);
+  confettiCtx = confettiCanvas.getContext('2d');
+  if (confettiCtx) {
+    confettiCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  return confettiCanvas;
+}
+
+function stopConfettiEngine() {
+  if (confettiAnimationId) {
+    cancelAnimationFrame(confettiAnimationId);
+    confettiAnimationId = null;
+  }
+  confettiParticles = [];
+  if (confettiCanvas) {
+    if (confettiResizeHandler) {
+      window.removeEventListener('resize', confettiResizeHandler);
+      confettiResizeHandler = null;
+    }
+    if (confettiCanvas.parentNode) {
+      confettiCanvas.parentNode.removeChild(confettiCanvas);
+    }
+    confettiCanvas = null;
+    confettiCtx = null;
+  }
+}
+
+function createConfettiParticle({ x, y, vx, vy, layer = 'mid', shape = null }) {
+  const item = CONFETTI_PALETTE[Math.floor(Math.random() * CONFETTI_PALETTE.length)];
+  const shapes = ['rect', 'rect', 'circle', 'streamer', 'star'];
+  const chosenShape = shape || shapes[Math.floor(Math.random() * shapes.length)];
+
+  let scale = 1.0;
+  let layerOpacity = 1.0;
+  let termVel = 2.2;
+  let gravity = 0.28;
+
+  if (layer === 'fg') {
+    scale = 1.35 + Math.random() * 0.45; // 1.35x - 1.8x
+    layerOpacity = 1.0;
+    termVel = 2.4 + Math.random() * 0.8;
+    gravity = 0.32 + Math.random() * 0.08;
+  } else if (layer === 'bg') {
+    scale = 0.45 + Math.random() * 0.25; // 0.45x - 0.7x
+    layerOpacity = 0.65 + Math.random() * 0.25;
+    termVel = 1.3 + Math.random() * 0.5;
+    gravity = 0.16 + Math.random() * 0.06;
+  } else {
+    // mid
+    scale = 0.85 + Math.random() * 0.35; // 0.85x - 1.2x
+    layerOpacity = 0.95;
+    termVel = 1.8 + Math.random() * 0.6;
+    gravity = 0.24 + Math.random() * 0.08;
+  }
+
+  const baseW = chosenShape === 'streamer' ? (3.5 * scale) : (9 * scale);
+  const baseH = chosenShape === 'streamer' ? (22 * scale) : (6 * scale);
+
+  return {
+    x,
+    y,
+    vx,
+    vy,
+    layer,
+    scale,
+    color: item.color,
+    backColor: getConfettiBackfaceColor(item.color),
+    isMetallic: item.isMetallic,
+    shape: chosenShape,
+    width: baseW,
+    height: baseH,
+    size: (6 + Math.random() * 6) * scale,
+    drag: 0.955 + Math.random() * 0.015,
+    gravity,
+    terminalVelocity: termVel,
+    swayPhase: Math.random() * Math.PI * 2,
+    swaySpeed: 0.035 + Math.random() * 0.05,
+    swayAmplitude: (1.0 + Math.random() * 1.8) * scale,
+    drift: (Math.random() - 0.5) * 0.4,
+    rotationX: Math.random() * Math.PI * 2,
+    rotationXSpeed: 0.06 + Math.random() * 0.1,
+    rotationY: Math.random() * Math.PI * 2,
+    rotationYSpeed: 0.05 + Math.random() * 0.08,
+    rotationZ: Math.random() * Math.PI * 2,
+    rotationZSpeed: (Math.random() - 0.5) * 0.06,
+    opacity: layerOpacity,
+    baseOpacity: layerOpacity,
+    decay: 0.0022 + Math.random() * 0.0016 // 5.0 to 7.0 seconds of celebration
+  };
+}
+
+function spawnConfettiCannonVolley(originX, originY, baseAngleDeg, spreadDeg, count, minSpeed, maxSpeed) {
+  const layers = ['bg', 'mid', 'mid', 'fg'];
+  for (let i = 0; i < count; i++) {
+    const angleOffset = (Math.random() - 0.5) * spreadDeg;
+    const angleRad = (baseAngleDeg + angleOffset) * (Math.PI / 180);
+    const speed = minSpeed + Math.random() * (maxSpeed - minSpeed);
+    const layer = layers[Math.floor(Math.random() * layers.length)];
+
+    confettiParticles.push(createConfettiParticle({
+      x: originX,
+      y: originY,
+      vx: Math.cos(angleRad) * speed,
+      vy: Math.sin(angleRad) * speed,
+      layer
+    }));
+  }
+}
+
+function spawnConfettiCascadeDrop(count, width) {
+  const layers = ['bg', 'bg', 'mid', 'mid', 'fg'];
+  for (let i = 0; i < count; i++) {
+    const x = Math.random() * width;
+    const y = -10 - Math.random() * 60;
+    const vx = (Math.random() - 0.5) * 2;
+    const vy = 0.5 + Math.random() * 2.0;
+    const layer = layers[Math.floor(Math.random() * layers.length)];
+
+    confettiParticles.push(createConfettiParticle({
+      x,
+      y,
+      vx,
+      vy,
+      layer
+    }));
+  }
+}
+
+function updateAndRenderConfetti() {
+  if (!confettiCtx || confettiParticles.length === 0) {
+    stopConfettiEngine();
+    return;
+  }
+
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+
+  confettiCtx.clearRect(0, 0, width, height);
+
+  for (let i = 0; i < confettiParticles.length; i++) {
+    const p = confettiParticles[i];
+
+    // Air drag on initial burst
+    p.vx *= p.drag;
+    p.vy *= p.drag;
+
+    // Gravity accelerating downward until aerodynamic terminal velocity clamp
+    p.vy = Math.min(p.vy + p.gravity, p.terminalVelocity);
+
+    // Harmonic leaf flutter sway
+    p.swayPhase += p.swaySpeed;
+    const swayOffset = Math.sin(p.swayPhase) * p.swayAmplitude;
+
+    p.x += p.vx + swayOffset + p.drift;
+    p.y += p.vy;
+
+    // 3D Tumbling rotations
+    p.rotationX += p.rotationXSpeed;
+    p.rotationY += p.rotationYSpeed;
+    p.rotationZ += p.rotationZSpeed;
+
+    // Slow decay
+    p.opacity -= p.decay;
+
+    if (p.opacity <= 0 || p.y > height + 80) continue;
+
+    confettiCtx.save();
+    confettiCtx.translate(p.x, p.y);
+    confettiCtx.rotate(p.rotationZ);
+
+    const cosX = Math.cos(p.rotationX);
+    const cosY = Math.cos(p.rotationY);
+    const isBack = cosX < 0;
+    const scaleX = Math.abs(cosY);
+    const scaleY = Math.abs(cosX);
+
+    // Specular highlight for metallic foil when facing direct angle
+    const isGlint = p.isMetallic && (cosX > 0.82 || cosY > 0.82);
+
+    confettiCtx.globalAlpha = Math.max(0, Math.min(p.baseOpacity, p.opacity));
+    confettiCtx.fillStyle = isGlint ? '#ffffff' : (isBack ? p.backColor : p.color);
+
+    if (p.shape === 'circle') {
+      confettiCtx.beginPath();
+      confettiCtx.ellipse(0, 0, Math.max(0.5, (p.size / 2) * scaleX), Math.max(0.5, (p.size / 2) * scaleY), 0, 0, Math.PI * 2);
+      confettiCtx.fill();
+    } else if (p.shape === 'star') {
+      const r = p.size;
+      confettiCtx.beginPath();
+      confettiCtx.moveTo(0, -r * scaleY);
+      confettiCtx.quadraticCurveTo(0, 0, r * scaleX, 0);
+      confettiCtx.quadraticCurveTo(0, 0, 0, r * scaleY);
+      confettiCtx.quadraticCurveTo(0, 0, -r * scaleX, 0);
+      confettiCtx.quadraticCurveTo(0, 0, 0, -r * scaleY);
+      confettiCtx.fill();
+    } else if (p.shape === 'streamer') {
+      // Helical ribbon streamer
+      const w = Math.max(1, p.width * scaleX);
+      const h = p.height;
+      const wave = Math.sin(p.swayPhase * 2) * 5 * p.scale;
+
+      confettiCtx.beginPath();
+      confettiCtx.moveTo(-w / 2, -h / 2 * scaleY);
+      confettiCtx.quadraticCurveTo(wave, 0, -w / 2 + wave * 0.5, h / 2 * scaleY);
+      confettiCtx.lineTo(w / 2 + wave * 0.5, h / 2 * scaleY);
+      confettiCtx.quadraticCurveTo(wave + w, 0, w / 2, -h / 2 * scaleY);
+      confettiCtx.closePath();
+      confettiCtx.fill();
+    } else {
+      // Classic paper rectangle
+      const w = Math.max(1, p.width * scaleX);
+      const h = Math.max(1, p.height * scaleY);
+      confettiCtx.fillRect(-w / 2, -h / 2, w, h);
+    }
+
+    // Specular center shimmer glint on metallic foil
+    if (isGlint) {
+      confettiCtx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+      confettiCtx.beginPath();
+      confettiCtx.arc(0, 0, Math.max(1, 2.2 * p.scale), 0, Math.PI * 2);
+      confettiCtx.fill();
+    }
+
+    confettiCtx.restore();
+  }
+
+  confettiParticles = confettiParticles.filter(p => p.opacity > 0 && p.y <= height + 80);
+
+  if (confettiParticles.length > 0) {
+    confettiAnimationId = requestAnimationFrame(updateAndRenderConfetti);
+  } else {
+    stopConfettiEngine();
+  }
+}
+
 /**
- * triggerConfetti() — realistic falling confetti.
- *
- * Physics model (same approach as canvas-confetti):
- *   • Each piece has an initial (vx, vy) velocity that decays with drag each step
- *   • Gravity increments vy every step → smooth accelerating fall
- *   • The visual "flutter" of a paper piece is a rotateY wobble (face→edge→back)
- *     NOT lateral position oscillation (which causes the zigzag)
- *   • rotateZ adds a gentle lazy 2-D spin
+ * triggerConfetti() — world-class celebratory confetti engine.
+ * Dual corner sky-launch cannons + center volley + cascading ticker-tape drop with 3D paper flutter & foil shimmer.
  */
 function triggerConfetti() {
   if (!isConfettiModeEnabled()) return;
 
-  const container = document.getElementById('confettiContainer');
-  if (!container) return;
+  const canvas = getOrCreateConfettiCanvas();
+  if (!canvas) return;
 
-  // Perspective on the container makes rotateY look truly 3-D
-  container.style.perspective = '700px';
+  const W = window.innerWidth;
+  const H = window.innerHeight;
 
-  const COUNT = 250;
-  const W     = window.innerWidth;
-  const H     = window.innerHeight;
+  // Wave 1 (0ms): High-altitude Sky-Launch from dual bottom-corner cannons
+  spawnConfettiCannonVolley(W * 0.06, H * 0.98, -64, 34, 110, 28, 42); // Left cannon pointing up-right
+  spawnConfettiCannonVolley(W * 0.94, H * 0.98, -116, 34, 110, 28, 42); // Right cannon pointing up-left
 
-  const SHAPES = ['rect', 'rect', 'rect', 'rect', 'circle', 'streamer'];
+  // Wave 2 (160ms): Center fountain volley
+  setTimeout(() => {
+    if (!isConfettiModeEnabled() || !confettiCanvas) return;
+    spawnConfettiCannonVolley(W * 0.5, H * 0.95, -90, 48, 65, 24, 36);
+  }, 160);
 
-  const COLORS = [
-    '#ff6b6b','#ff4757','#f9ca24','#f0932b',
-    '#6ab04c','#badc58','#22a6b3','#30336b',
-    '#be2edd','#e056fd','#ff9ff3','#54a0ff',
-    '#ff6348','#ffd32a','#0abde3','#10ac84',
-    '#ff9f43','#ee5a24','#c0392b','#8e44ad'
-  ];
+  // Wave 3 (320ms): Overhead cascading ticker-tape curtain drop across full width
+  setTimeout(() => {
+    if (!isConfettiModeEnabled() || !confettiCanvas) return;
+    spawnConfettiCascadeDrop(110, W);
+  }, 320);
 
-  for (let i = 0; i < COUNT; i++) {
-    const el    = document.createElement('div');
-    const color = COLORS[Math.floor(Math.random() * COLORS.length)];
-    const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-
-    let w, h;
-    if (shape === 'circle') {
-      w = h = 5 + Math.random() * 7;
-    } else if (shape === 'streamer') {
-      w = 2 + Math.random() * 2;
-      h = 14 + Math.random() * 18;
-    } else {
-      w = 9 + Math.random() * 9;   // landscape rect — wider than tall
-      h = 4 + Math.random() * 5;
-    }
-
-    const startX = Math.random() * W;
-    const startY = -(h + Math.random() * 400); // spread across 400px height for staggered entry
-
-    el.style.cssText = `
-      position: absolute;
-      left: ${startX}px;
-      top: ${startY}px;
-      width: ${w}px;
-      height: ${h}px;
-      background: ${color};
-      border-radius: ${shape === 'circle' ? '50%' : '1px'};
-      pointer-events: none;
-      will-change: transform, opacity;
-      transform-origin: center center;
-    `;
-
-    container.appendChild(el);
-
-    // ── Physics constants ────────────────────────────────────────────────────
-    const GRAVITY      = 0.8;    // downward acceleration
-    const DRAG         = 0.96;   // air resistance
-    const STEPS        = 120;    // more steps for full-screen fall
-
-    // Initial velocity — larger spread
-    let vx = (Math.random() - 0.5) * 15;  // px per step
-    let vy = 1 + Math.random() * 3;        // px per step
-
-    // Visual rotation — purely decorative, does NOT affect position
-    const wobbleSpeed  = (2 + Math.random() * 4) * (Math.random() < 0.5 ? 1 : -1);
-    const wobbleStart  = Math.random() * 360; // deg, random start angle
-    const spinZTotal   = (Math.random() - 0.5) * 160; 
-
-    // Timing
-    const duration = 2000 + Math.random() * 2000;
-    const delay    = Math.random() * 800;
-
-    // ── Build keyframes via Euler integration ────────────────────────────────
-    const keyframes = [];
-    let px = 0, py = 0;
-
-    for (let s = 0; s <= STEPS; s++) {
-      const p = s / STEPS; // 0 → 1
-
-      if (s > 0) {
-        vx *= DRAG;
-        vy *= DRAG;
-        vy += GRAVITY;
-        px += vx;
-        py += vy;
-      }
-
-      // rotateY: the paper-flip wobble (face→edge→back of piece)
-      const rotY = wobbleStart + wobbleSpeed * s * 6;
-      // rotateZ: slow in-plane tumble
-      const rotZ = spinZTotal * p;
-
-      // Opacity: stay solid, gentle fade-out at bottom
-      const opacity = p > 0.8 ? (1 - p) / 0.2 : 1;
-
-      keyframes.push({
-        transform: `translate(${px}px, ${py}px) rotateY(${rotY}deg) rotateZ(${rotZ}deg)`,
-        opacity,
-        offset: p
-      });
-    }
-
-    el.animate(keyframes, {
-      duration,
-      delay,
-      easing:    'linear',
-      fill:      'forwards',
-      composite: 'replace'
-    }).onfinish = () => el.remove();
+  if (!confettiAnimationId) {
+    confettiAnimationId = requestAnimationFrame(updateAndRenderConfetti);
   }
 }
 

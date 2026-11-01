@@ -15,6 +15,7 @@ Home Assistant Version Control provides complete version history for your setup.
 *   **Track Custom Paths:** Easily include folders like `/share` and `/media` in your version history. Perfect for tracking external configs (like Frigate) using Home Assistant mounts.
 *   **More Than Just Lovelace:** Explicitly whitelist and version control specific files/patterns in the `.storage` directory (e.g., core.entity_registry).
 *   **Keep Your Own Extensions:** Configure any file format to track and backup (.sh, .py, .json, etc.) directly in the config tab.
+*   **Upgraded Confetti Mode:** More celebrate.
 *   **Enhanced Security:** Securely connect to private repositories using persistent SSH keys and trusted CA certificates.
 
 <p align="center">
@@ -513,6 +514,10 @@ Want to contribute? Check out [contributing](CONTRIBUTING.md) for guidelines.
 
 Want the latest features? The [develop branch](https://github.com/saihgupr/HomeAssistantVersionControl/tree/develop) includes the most recent updates and features.
 
-## Support
+## Support & Feedback
 
-If you find this project useful, please consider giving it a star ⭐ or [making a donation](https://ko-fi.com/saihgupr).
+If you encounter any issues, bugs, or have feature requests, please [open an issue on GitHub](https://github.com/saihgupr/HomeAssistantVersionControl/issues).
+
+Home Assistant Version Control is open-source and free. If you find it useful, consider giving it a star on GitHub or making a donation to support development!
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/saihgupr)

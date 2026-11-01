@@ -508,11 +508,11 @@ curl -X POST http://homeassistant.local:54001/api/retention/cleanup \
 
 ## Contributing
 
-Found a bug? Feel free to [open an issue](https://github.com/saihgupr/HomeAssistantVersionControl/issues).
+Contributions, fixes, and feature ideas are always welcome!
 
-Want to contribute? Check out [contributing](CONTRIBUTING.md) for guidelines.
-
-Want the latest features? The [develop branch](https://github.com/saihgupr/HomeAssistantVersionControl/tree/develop) includes the most recent updates and features.
+- **Pull Requests:** Please target the **[`develop`](https://github.com/saihgupr/HomeAssistantVersionControl/tree/develop)** branch. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+- **Latest Features:** The [`develop`](https://github.com/saihgupr/HomeAssistantVersionControl/tree/develop) branch contains the latest unreleased updates.
+- **Bug Reports:** If you find an issue, feel free to [open an issue](https://github.com/saihgupr/HomeAssistantVersionControl/issues).
 
 ## Support & Feedback
 

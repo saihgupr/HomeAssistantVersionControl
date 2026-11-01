@@ -5,19 +5,23 @@
 Home Assistant Version Control provides complete version history for your setup. It automatically tracks every change to your YAML configuration files using a robust local Git backend. Browse your history, visualize diffs, and restore individual files or your entire configuration to any previous state with a single click.
 
 
-##  What's New!
+## 📱 What's New in v1.5!
 
+*   **Native Mobile & Tablet Interface:** Modern responsive design for phone and tablet companion apps featuring a bottom navigation bar, smooth slide-out views, and touch-optimized action buttons.
+*   **Track Addon Configs (`/addon_configs`):** Full support for tracking and versioning Home Assistant add-on configuration files alongside your main YAML configs.
+*   **Manual Mode Protection:** Preserves user-managed Git branches and stashes without automatic overwrites, while "Backup Now" stages all modifications and newly created files respecting `.gitignore`.
+*   **Real-Time Settings Auto-Save:** Instant persistence across all settings toggles and preferences.
+*   **Cloud Sync Authentication Stability:** Standardized HTTP authorization headers to eliminate token loss on newer Git versions.
 *   **Track Custom Paths:** Easily include folders like `/share` and `/media` in your version history. Perfect for tracking external configs (like Frigate) using Home Assistant mounts.
 *   **More Than Just Lovelace:** Explicitly whitelist and version control specific files/patterns in the `.storage` directory (e.g., core.entity_registry).
 *   **Keep Your Own Extensions:** Configure any file format to track and backup (.sh, .py, .json, etc.) directly in the config tab.
 *   **Enhanced Security:** Securely connect to private repositories using persistent SSH keys and trusted CA certificates.
-*   **Simple Remote Management:** Change your Git remote URL directly from the configuration tab without touching the command line.
-*   **Polished Interface:** Enjoy resizable panels, subtle UI animations, and improved visibility for files tracked outside the main config folder.
-*   **Confetti Mode:** Celebrate every successful restore with a realistic confetti burst (opt-in via settings).
-*   **History Control:** New setting to choose exactly how many commits to keep in your history, helping manage storage on smaller devices.
-*   **Robust Manual Backup Exclusions:** The manual backup endpoint (`POST /api/git/add-all-and-commit`) now automatically respects your `.gitignore` and configured exclusions (preventing HTTP 500 crashes).
-*   **Optimized Standalone Watcher:** Improved path normalization and resolved reference crashes for non-addon (standalone Docker) file-watching environments.
 
+<p align="center">
+  <img src="https://github.com/saihgupr/HomeAssistantVersionControl/raw/develop/images/screenshots/mobile_1.png" width="320" alt="Mobile Timeline" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://github.com/saihgupr/HomeAssistantVersionControl/raw/develop/images/screenshots/mobile_2.png" width="320" alt="Mobile Diff & Restore" />
+</p>
 
 ![Screenshot 1](https://github.com/saihgupr/HomeAssistantVersionControl/raw/develop/images/screenshots/1.2.png)
 ![Screenshot 2](https://github.com/saihgupr/HomeAssistantVersionControl/raw/develop/images/screenshots/2.2.png)

@@ -231,3 +231,90 @@ test('clearing mirrorUrl removes mirror remote', async (t) => {
   assert.ok(remotes.includes('origin'), 'origin remote must remain');
 });
 
+test('mirrorEnabled toggle persists even when mirrorUrl is initially empty', async (t) => {
+  const repo = await createRepoWithRemotes('test-toggle-persistence');
+  const server = await startServer(repo.config, { manualMode: false });
+  t.after(() => server.stop());
+
+  // Toggle on without a URL yet
+  const res = await server.post('/cloud-sync/settings', {
+    mirrorEnabled: true,
+    mirrorUrl: '',
+  });
+  assert.equal(res.body.success, true);
+
+  const settings = await server.get('/cloud-sync/settings');
+  assert.equal(settings.body.settings.mirrorEnabled, true);
+
+  // Toggle off
+  await server.post('/cloud-sync/settings', {
+    mirrorEnabled: false,
+    mirrorUrl: '',
+  });
+  const settingsOff = await server.get('/cloud-sync/settings');
+  assert.equal(settingsOff.body.settings.mirrorEnabled, false);
+});
+
+test('turning mirrorEnabled OFF keeps mirrorUrl saved but disables pushing to mirror', async (t) => {
+  const repo = await createRepoWithRemotes('test-toggle-preserves-url');
+  const server = await startServer(repo.config, { manualMode: false });
+  t.after(() => server.stop());
+
+  // Configure origin and mirror with mirrorEnabled: true
+  await server.post('/cloud-sync/settings', {
+    enabled: true,
+    authProvider: 'generic',
+    remoteUrl: repo.originRemote,
+    mirrorEnabled: true,
+    mirrorUrl: repo.mirrorRemote,
+  });
+
+  // Commit 1 - should push to both
+  await writeFile(path.join(repo.config, 'automations.yaml'), '- alias: commit1\n');
+  git(repo.config, 'add', 'automations.yaml');
+  git(repo.config, 'commit', '-m', 'commit 1');
+  const head1 = git(repo.config, 'rev-parse', 'HEAD');
+  await server.post('/cloud-sync/push', { force: true });
+  assert.equal(git(repo.originRemote, 'rev-parse', 'main'), head1);
+  assert.equal(git(repo.mirrorRemote, 'rev-parse', 'main'), head1);
+
+  // Turn mirror toggle OFF - keep mirrorUrl
+  await server.post('/cloud-sync/settings', {
+    mirrorEnabled: false,
+    mirrorUrl: repo.mirrorRemote,
+  });
+
+  // Verify settings still preserve mirrorUrl
+  const settings = await server.get('/cloud-sync/settings');
+  assert.equal(settings.body.settings.mirrorEnabled, false);
+  assert.equal(settings.body.settings.mirrorUrl, repo.mirrorRemote);
+
+  // Commit 2 - push should only go to origin, NOT mirror
+  await writeFile(path.join(repo.config, 'automations.yaml'), '- alias: commit2\n');
+  git(repo.config, 'add', 'automations.yaml');
+  git(repo.config, 'commit', '-m', 'commit 2');
+  const head2 = git(repo.config, 'rev-parse', 'HEAD');
+  await server.post('/cloud-sync/push', { force: true });
+
+  assert.equal(git(repo.originRemote, 'rev-parse', 'main'), head2);
+  assert.equal(git(repo.mirrorRemote, 'rev-parse', 'main'), head1, 'mirror remote should remain on commit 1 while toggle is off');
+
+  // Turn mirror toggle back ON
+  await server.post('/cloud-sync/settings', {
+    mirrorEnabled: true,
+    mirrorUrl: repo.mirrorRemote,
+  });
+
+  // Commit 3 - should push to both again
+  await writeFile(path.join(repo.config, 'automations.yaml'), '- alias: commit3\n');
+  git(repo.config, 'add', 'automations.yaml');
+  git(repo.config, 'commit', '-m', 'commit 3');
+  const head3 = git(repo.config, 'rev-parse', 'HEAD');
+  await server.post('/cloud-sync/push', { force: true });
+
+  assert.equal(git(repo.originRemote, 'rev-parse', 'main'), head3);
+  assert.equal(git(repo.mirrorRemote, 'rev-parse', 'main'), head3, 'mirror remote should update to commit 3 once toggle is re-enabled');
+});
+
+
+

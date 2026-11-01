@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: homeassistant-version-control
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: homeassistant-version-control/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Fails fast on syntax errors that would stop the add-on from starting
+      - name: Check syntax
+        run: |
+          for file in server.js automation-parser.js utils/*.js; do
+            node --check "$file"
+          done
+
+      - name: Run tests
+        run: npm test

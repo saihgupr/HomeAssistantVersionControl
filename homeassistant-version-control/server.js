@@ -112,14 +112,6 @@ function configureGitIdentity() {
   }
 }
 
-function assertAutoManaged(operation) {
-  if (runtimeSettings.manualMode) {
-    const error = new Error(`${operation} is disabled in manual mode`);
-    error.statusCode = 403;
-    throw error;
-  }
-}
-
 app.use(express.json());
 
 // CORS middleware for Home Assistant Ingress
@@ -486,10 +478,13 @@ const RUNTIME_SETTINGS_SCHEMA = {
  * Guard for operations that assume HAVC owns the repository: rewriting .gitignore,
  * managing the origin remote, pushing. In manual mode the repository belongs to the
  * user, so call this before any such mutation instead of checking the flag inline.
+ * The thrown error carries statusCode 403 so API handlers can pass it through.
  */
 function assertAutoManaged(operation) {
   if (runtimeSettings.manualMode) {
-    throw new Error(`${operation} is disabled in manual mode`);
+    const error = new Error(`${operation} is disabled in manual mode`);
+    error.statusCode = 403;
+    throw error;
   }
 }
 
@@ -3335,7 +3330,7 @@ app.post('/api/retention/cleanup', async (req, res) => {
 
     res.json({ success: true, message: 'Cleanup started in background' });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(error.statusCode || 500).json({ success: false, error: error.message });
   }
 });
 
@@ -3348,7 +3343,7 @@ app.post('/api/run-retention', async (req, res) => {
     runRetentionCleanup(true).catch(err => console.error('[api] Background cleanup failed:', err));
     res.json({ success: true, message: 'Cleanup started in background' });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(error.statusCode || 500).json({ success: false, error: error.message });
   }
 });
 
@@ -3957,7 +3952,7 @@ app.post('/api/retention/cleanup', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('[retention-api] Cleanup failed:', error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       error: error.message
     });

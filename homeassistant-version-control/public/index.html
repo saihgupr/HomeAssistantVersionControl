@@ -11,8 +11,25 @@
   <title>Home Assistant Version Control</title>
   <script src="js/diff.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
-  <link rel="stylesheet" href="css/style.css?v=20260901_1250">
+  <link rel="stylesheet" href="css/style.css?v=20261101_1735">
   <link rel="icon" type="image/x-icon" href="images/favicon.ico">
+  <style>
+    /* Suppress browser / WebKit credential and contact autofill icons */
+    input::-webkit-credentials-auto-fill-button {
+      visibility: hidden !important;
+      display: none !important;
+      pointer-events: none !important;
+      position: absolute !important;
+      right: 0 !important;
+    }
+    input::-webkit-contacts-auto-fill-button {
+      visibility: hidden !important;
+      display: none !important;
+      pointer-events: none !important;
+      position: absolute !important;
+      right: 0 !important;
+    }
+  </style>
   <script>
     // Apply saved panel width before rendering to prevent transition flash
     (function () {
@@ -736,12 +753,20 @@
               </div>
 
               <!-- Mirror Remote Section (Secondary Backup Target) -->
-              <div class="setting-item" style="margin-bottom: 20px; border-top: 1px solid var(--border-subtle); padding-top: 16px;">
-                <label style="display: block; margin-bottom: 8px;">
+              <div class="setting-item" style="margin-bottom: 16px;">
+                <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
                   <span style="color: var(--text-primary); font-size: 14px;"
-                    data-i18n="settings.cloud_mirror_url">Mirror Remote URL (Optional)</span>
+                    data-i18n="settings.cloud_mirror_enabled">Mirror Remote URL</span>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="cloudMirrorEnabled" style="display: none;"
+                      onchange="handleMirrorToggle(true)">
+                    <label for="cloudMirrorEnabled" class="toggle-slider"></label>
+                  </div>
                 </label>
-                <input type="text" id="cloudMirrorUrl" placeholder="https://git.example.com/user/backup.git" onchange="saveCloudSyncSettings(true)" style="
+              </div>
+
+              <div id="cloudMirrorOptions" style="display: none; margin-bottom: 20px;">
+                <input type="url" id="cloudMirrorUrl" name="cloud_mirror_url" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other" placeholder="https://git.example.com/user/backup.git" onchange="saveCloudSyncSettings(true)" style="
                   width: 100%;
                   padding: 10px 12px;
                   background: var(--bg-tertiary);
@@ -753,7 +778,7 @@
                   margin-bottom: 8px;
                 ">
                 <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                  <input type="password" id="cloudMirrorAuthToken" placeholder="Personal access token (optional)" onchange="saveCloudSyncSettings(true)" style="
+                  <input type="password" id="cloudMirrorAuthToken" name="cloud_mirror_auth_token" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other" placeholder="Personal access token" onchange="saveCloudSyncSettings(true)" style="
                     flex: 1;
                     padding: 10px 12px;
                     background: var(--bg-tertiary);

@@ -1647,6 +1647,19 @@ function handleCloudSyncToggle(save = false) {
   }
 }
 
+function handleMirrorToggle(save = false) {
+  const mirrorEnabled = document.getElementById('cloudMirrorEnabled');
+  const mirrorOptions = document.getElementById('cloudMirrorOptions');
+
+  if (mirrorEnabled && mirrorOptions) {
+    mirrorOptions.style.display = mirrorEnabled.checked ? 'block' : 'none';
+  }
+
+  if (save) {
+    saveCloudSyncSettings(true);
+  }
+}
+
 async function loadCloudSyncSettings() {
   try {
     const response = await fetch(`${API}/cloud-sync/settings`);
@@ -1707,8 +1720,18 @@ async function loadCloudSyncSettings() {
 
       const mirrorAuthTokenInput = document.getElementById('cloudMirrorAuthToken');
       if (mirrorAuthTokenInput) {
-        mirrorAuthTokenInput.placeholder = settings.hasMirrorAuthToken ? '•••••••••••••••• (configured)' : 'Personal access token (optional)';
+        mirrorAuthTokenInput.placeholder = settings.hasMirrorAuthToken ? '•••••••••••••••• (configured)' : 'Personal access token';
         mirrorAuthTokenInput.value = '';
+      }
+
+      const mirrorEnabledCheckbox = document.getElementById('cloudMirrorEnabled');
+      const mirrorOptions = document.getElementById('cloudMirrorOptions');
+      const isMirrorEnabled = settings.mirrorEnabled === true;
+      if (mirrorEnabledCheckbox) {
+        mirrorEnabledCheckbox.checked = isMirrorEnabled;
+      }
+      if (mirrorOptions) {
+        mirrorOptions.style.display = isMirrorEnabled ? 'block' : 'none';
       }
 
       // Hide secrets toggle if secrets.yaml is already in exclude_files (making toggle irrelevant)
@@ -1860,6 +1883,7 @@ async function saveCloudSyncSettings(silent = false) {
   const pushFrequency = pushFrequencyElement ? pushFrequencyElement.value : 'manual';
   const includeSecrets = document.getElementById('cloudIncludeSecrets')?.checked ?? false;
   const ignoreSslErrors = document.getElementById('cloudIgnoreSslErrors')?.checked ?? false;
+  const mirrorEnabled = document.getElementById('cloudMirrorEnabled')?.checked ?? false;
   const mirrorUrlInput = document.getElementById('cloudMirrorUrl');
   const mirrorUrl = mirrorUrlInput ? mirrorUrlInput.value.trim() : '';
   const mirrorAuthTokenInput = document.getElementById('cloudMirrorAuthToken');
@@ -1873,6 +1897,7 @@ async function saveCloudSyncSettings(silent = false) {
       includeSecrets,
       ignoreSslErrors,
       authProvider,
+      mirrorEnabled,
       mirrorUrl
     };
     if (mirrorAuthToken) {

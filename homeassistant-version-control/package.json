@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node --test tests/manual-mode.test.mjs",
+    "test": "node --test tests/manual-mode.test.mjs tests/cloud-mirror.test.mjs",
     "lint": "echo \"No linter specified\" && exit 0"
   },
   "keywords": [

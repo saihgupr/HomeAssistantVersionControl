@@ -378,7 +378,12 @@ let runtimeSettings = {
     ignoreSslErrors: false, // Whether to ignore SSL certificate validation errors
     lastPushTime: null,
     lastPushStatus: null, // 'success', 'failed'
-    lastPushError: null
+    lastPushError: null,
+    mirrorUrl: '', // Optional secondary mirror remote URL
+    mirrorAuthToken: '', // Optional mirror auth token
+    lastMirrorPushTime: null,
+    lastMirrorPushStatus: null, // 'success', 'error'
+    lastMirrorPushError: null
   },
   // File extension configuration - what gets tracked/ignored
   extensions: {
@@ -1095,6 +1100,11 @@ async function loadRuntimeSettings() {
         includeSecrets: false
       };
     }
+    if (runtimeSettings.cloudSync.mirrorUrl === undefined) runtimeSettings.cloudSync.mirrorUrl = '';
+    if (runtimeSettings.cloudSync.mirrorAuthToken === undefined) runtimeSettings.cloudSync.mirrorAuthToken = '';
+    if (runtimeSettings.cloudSync.lastMirrorPushTime === undefined) runtimeSettings.cloudSync.lastMirrorPushTime = null;
+    if (runtimeSettings.cloudSync.lastMirrorPushStatus === undefined) runtimeSettings.cloudSync.lastMirrorPushStatus = null;
+    if (runtimeSettings.cloudSync.lastMirrorPushError === undefined) runtimeSettings.cloudSync.lastMirrorPushError = null;
 
     // Log final configuration with sources
     console.log('[init] Runtime settings loaded:');
@@ -1566,6 +1576,17 @@ async function initRepo() {
         // We will apply this to git after initialization/verification
         global.pendingRemoteUpdate = true;
       }
+
+      // Handle mirror_url and mirror_auth_token from config.json
+      if (config.mirror_url !== undefined && config.mirror_url.trim() !== runtimeSettings.cloudSync.mirrorUrl) {
+        console.log(`[init] Mirror URL from config: ${config.mirror_url}`);
+        runtimeSettings.cloudSync.mirrorUrl = config.mirror_url.trim();
+        global.pendingMirrorUpdate = true;
+      }
+      if (config.mirror_auth_token !== undefined && config.mirror_auth_token !== runtimeSettings.cloudSync.mirrorAuthToken) {
+        runtimeSettings.cloudSync.mirrorAuthToken = config.mirror_auth_token;
+        global.pendingMirrorUpdate = true;
+      }
     } catch (error) {
       // Ignore if file doesn't exist
     }
@@ -1796,6 +1817,28 @@ async function initRepo() {
         console.error('[init] Failed to update git remote from config:', remoteResult.error);
       }
       global.pendingRemoteUpdate = false;
+    }
+
+    // Apply pending mirror update from config
+    if (global.pendingMirrorUpdate && !runtimeSettings.manualMode) {
+      if (runtimeSettings.cloudSync.mirrorUrl) {
+        console.log(`[init] Applying pending mirror URL update: ${runtimeSettings.cloudSync.mirrorUrl}`);
+        const mirrorResult = await setupGitRemote(runtimeSettings.cloudSync.mirrorUrl, runtimeSettings.cloudSync.mirrorAuthToken, 'mirror');
+        if (mirrorResult.success) {
+          console.log('[init] Successfully updated git mirror remote from config');
+          await saveRuntimeSettings();
+        } else {
+          console.error('[init] Failed to update git mirror remote from config:', mirrorResult.error);
+        }
+      } else {
+        try {
+          await gitExec(['remote', 'remove', 'mirror']);
+          console.log('[init] Removed git mirror remote (mirror_url empty)');
+        } catch (e) {
+          // mirror remote didn't exist
+        }
+      }
+      global.pendingMirrorUpdate = false;
     }
 
     gitInitialized = true;
@@ -4341,14 +4384,21 @@ app.post('/api/script/:id/restore', async (req, res) => {
 
 /**
  * Clear any existing git http.*.extraHeader configurations
+ * @param {string|null} targetUrl - If provided, only unset extraHeaders matching this target URL. If null, unset all.
  */
-async function clearGitHttpAuthHeaders() {
+async function clearGitHttpAuthHeaders(targetUrl = null) {
   try {
     const { stdout: existing } = await gitExec(['config', '--get-regexp', '^http\\..*\\.extraheader$']);
     for (const line of (existing || '').split('\n')) {
       const key = line.trim().split(/\s+/)[0];
-      if (key) {
+      if (!key) continue;
+      if (!targetUrl) {
         await gitExec(['config', '--unset-all', key]).catch(() => {});
+      } else {
+        const strippedTarget = targetUrl.replace(/\.git$/, '');
+        if (key.includes(targetUrl) || key.includes(strippedTarget)) {
+          await gitExec(['config', '--unset-all', key]).catch(() => {});
+        }
       }
     }
   } catch (e) {
@@ -4360,12 +4410,17 @@ async function clearGitHttpAuthHeaders() {
  * Set up or update the git remote for cloud sync
  * @param {string} url - Remote repository URL
  * @param {string} token - Authentication token
+ * @param {string} remoteName - Remote name ('origin' or 'mirror')
  * @returns {Object} Result with success status
  */
-async function setupGitRemote(url, token) {
-  assertAutoManaged('Configuring the git remote');
+async function setupGitRemote(url, token, remoteName = 'origin') {
+  assertAutoManaged(`Configuring the git remote (${remoteName})`);
   try {
     let cleanUrl = (url || '').trim();
+
+    if (!cleanUrl) {
+      return { success: false, error: 'Remote URL is required' };
+    }
 
     // Strip any previously embedded credentials from url
     cleanUrl = cleanUrl.replace(/:\/\/[^@]+@/, '://');
@@ -4382,9 +4437,9 @@ async function setupGitRemote(url, token) {
 
     const isSsh = cleanUrl.startsWith('git@') || cleanUrl.startsWith('ssh://');
 
-    // Check if origin remote exists
+    // Check if remote exists
     try {
-      const { stdout: currentRemoteRaw } = await gitExec(['remote', 'get-url', 'origin']);
+      const { stdout: currentRemoteRaw } = await gitExec(['remote', 'get-url', remoteName]);
       const currentRemote = (currentRemoteRaw || '').trim();
 
       // Check if current remote is already an SSH URL
@@ -4394,26 +4449,26 @@ async function setupGitRemote(url, token) {
         const targetRepo = parseRepoSlug(cleanUrl);
 
         if (currentRepo && targetRepo && currentRepo === targetRepo) {
-          console.log(`[cloud-sync] Preserving manually configured SSH remote (${currentRemote}) matching target (${targetRepo})`);
+          console.log(`[cloud-sync] Preserving manually configured SSH remote (${currentRemote}) for ${remoteName} matching target (${targetRepo})`);
           return { success: true };
         }
       }
 
       // Remote exists, update it if different
       if (currentRemote !== cleanUrl) {
-        await gitExec(['remote', 'set-url', 'origin', cleanUrl]);
-        console.log('[cloud-sync] Updated existing remote origin');
+        await gitExec(['remote', 'set-url', remoteName, cleanUrl]);
+        console.log(`[cloud-sync] Updated existing remote ${remoteName}`);
       }
     } catch (e) {
       // Remote doesn't exist, add it
-      await gitExec(['remote', 'add', 'origin', cleanUrl]);
-      console.log('[cloud-sync] Added new remote origin');
+      await gitExec(['remote', 'add', remoteName, cleanUrl]);
+      console.log(`[cloud-sync] Added new remote ${remoteName}`);
     }
 
     // Configure credentials via http.extraHeader to avoid leaking tokens in .git/config
     // and to prevent Git 2.54+ / curl 8.x false-redirect credential stripping bugs
     if (!isSsh && (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://'))) {
-      await clearGitHttpAuthHeaders();
+      await clearGitHttpAuthHeaders(cleanUrl);
 
       if (token) {
         const credentials = token.includes(':') ? token : `${token}:`;
@@ -4426,17 +4481,16 @@ async function setupGitRemote(url, token) {
           const stripped = cleanUrl.slice(0, -4);
           await gitExec(['config', `http.${stripped}.extraHeader`, `Authorization: Basic ${base64Auth}`]);
         }
-        console.log('[cloud-sync] Configured git extraHeader authentication');
+        console.log(`[cloud-sync] Configured git extraHeader authentication for ${remoteName}`);
       }
     }
 
     return { success: true };
   } catch (error) {
-    console.error('[cloud-sync] Error setting up remote:', error);
+    console.error(`[cloud-sync] Error setting up remote ${remoteName}:`, error);
     return { success: false, error: error.message };
   }
 }
-
 
 /**
  * Configure secrets.yaml tracking based on settings
@@ -4567,9 +4621,44 @@ async function pushToRemote(includeSecrets = false) {
     runtimeSettings.cloudSync.lastPushTime = timestamp;
     runtimeSettings.cloudSync.lastPushStatus = 'success';
     runtimeSettings.cloudSync.lastPushError = null;
+
+    // Optional Mirror Remote push (non-fatal)
+    if (runtimeSettings.cloudSync.mirrorUrl && runtimeSettings.cloudSync.mirrorUrl.trim()) {
+      try {
+        console.log(`[cloud-sync] Mirror remote configured, pushing ${localBranch} to mirror/${remoteBranch}...`);
+        const mirrorSetup = await setupGitRemote(
+          runtimeSettings.cloudSync.mirrorUrl,
+          runtimeSettings.cloudSync.mirrorAuthToken,
+          'mirror'
+        );
+        if (!mirrorSetup.success) {
+          throw new Error(mirrorSetup.error || 'Failed to setup mirror remote');
+        }
+        await gitExec(['push', '-f', '-u', 'mirror', `${localBranch}:${remoteBranch}`], {
+          ignoreSslErrors: runtimeSettings.cloudSync.ignoreSslErrors
+        });
+        console.log(`[cloud-sync] Successfully pushed to mirror/${remoteBranch}`);
+        runtimeSettings.cloudSync.lastMirrorPushTime = new Date().toISOString();
+        runtimeSettings.cloudSync.lastMirrorPushStatus = 'success';
+        runtimeSettings.cloudSync.lastMirrorPushError = null;
+      } catch (mirrorError) {
+        console.warn('[cloud-sync] Mirror push failed (non-fatal):', mirrorError.message);
+        runtimeSettings.cloudSync.lastMirrorPushTime = new Date().toISOString();
+        runtimeSettings.cloudSync.lastMirrorPushStatus = 'error';
+        runtimeSettings.cloudSync.lastMirrorPushError = mirrorError.message;
+      }
+    }
+
     await saveRuntimeSettings();
 
-    return { success: true, branch: remoteBranch };
+    return {
+      success: true,
+      branch: remoteBranch,
+      mirror: runtimeSettings.cloudSync.mirrorUrl ? {
+        status: runtimeSettings.cloudSync.lastMirrorPushStatus,
+        error: runtimeSettings.cloudSync.lastMirrorPushError
+      } : undefined
+    };
 
   } catch (error) {
     console.error('[cloud-sync] Push failed:', error);
@@ -4615,19 +4704,20 @@ async function triggerAutoPushIfConfigured() {
 
 /**
  * Test connection to remote repository
+ * @param {string} remoteName - Remote name ('origin' or 'mirror')
  * @returns {Object} Result with success status
  */
-async function testRemoteConnection() {
+async function testRemoteConnection(remoteName = 'origin') {
   try {
     // Use ls-remote to test connection without actually pushing
     // Note: Don't use --exit-code as it fails on empty repos (exit code 2)
-    await gitExec(['ls-remote', 'origin'], {
+    await gitExec(['ls-remote', remoteName], {
       ignoreSslErrors: runtimeSettings.cloudSync.ignoreSslErrors
     });
-    console.log('[cloud-sync] Remote connection test successful');
+    console.log(`[cloud-sync] Remote connection test successful for ${remoteName}`);
     return { success: true };
   } catch (error) {
-    console.error('[cloud-sync] Remote connection test failed:', error);
+    console.error(`[cloud-sync] Remote connection test failed for ${remoteName}:`, error);
     return { success: false, error: error.message };
   }
 }
@@ -4974,7 +5064,11 @@ app.get('/api/cloud-sync/status', async (req, res) => {
       lastPushTime: runtimeSettings.cloudSync.lastPushTime,
       lastPushStatus: runtimeSettings.cloudSync.lastPushStatus,
       lastPushError: runtimeSettings.cloudSync.lastPushError,
-      pushFrequency: runtimeSettings.cloudSync.pushFrequency
+      pushFrequency: runtimeSettings.cloudSync.pushFrequency,
+      mirrorUrl: runtimeSettings.cloudSync.mirrorUrl || '',
+      lastMirrorPushTime: runtimeSettings.cloudSync.lastMirrorPushTime,
+      lastMirrorPushStatus: runtimeSettings.cloudSync.lastMirrorPushStatus,
+      lastMirrorPushError: runtimeSettings.cloudSync.lastMirrorPushError
     });
   } catch (error) {
     console.error('[cloud-sync status] Error:', error);
@@ -4983,20 +5077,24 @@ app.get('/api/cloud-sync/status', async (req, res) => {
 });
 
 // Test cloud sync connection
-// Test cloud sync connection
 app.post('/api/cloud-sync/test', async (req, res) => {
   try {
-    const { remoteUrl, authToken, ignoreSslErrors } = req.body;
+    const { remoteUrl, authToken, ignoreSslErrors, remoteName = 'origin' } = req.body;
 
     // Use provided URL or fall back to stored URL
-    const targetUrl = remoteUrl || runtimeSettings.cloudSync.remoteUrl;
-
-    if (!targetUrl) {
-      return res.status(400).json({ success: false, error: 'Remote URL is required' });
+    let targetUrl;
+    let token;
+    if (remoteName === 'mirror') {
+      targetUrl = remoteUrl || runtimeSettings.cloudSync.mirrorUrl;
+      token = authToken !== undefined ? authToken : runtimeSettings.cloudSync.mirrorAuthToken;
+    } else {
+      targetUrl = remoteUrl || runtimeSettings.cloudSync.remoteUrl;
+      token = authToken !== undefined ? authToken : runtimeSettings.cloudSync.authToken;
     }
 
-    // Use provided token or fall back to stored token
-    const token = authToken || runtimeSettings.cloudSync.authToken;
+    if (!targetUrl) {
+      return res.status(400).json({ success: false, error: `${remoteName === 'mirror' ? 'Mirror' : 'Remote'} URL is required` });
+    }
 
     // Temporarily update ignoreSslErrors if provided for the test
     const oldIgnoreSsl = runtimeSettings.cloudSync.ignoreSslErrors;
@@ -5005,13 +5103,13 @@ app.post('/api/cloud-sync/test', async (req, res) => {
     }
 
     // Set up the remote with provided credentials
-    const setupResult = await setupGitRemote(targetUrl, token);
+    const setupResult = await setupGitRemote(targetUrl, token, remoteName);
     if (!setupResult.success) {
       return res.json({ success: false, error: setupResult.error });
     }
 
     // Test the connection
-    const testResult = await testRemoteConnection();
+    const testResult = await testRemoteConnection(remoteName);
 
     // Restore ignoreSslErrors
     runtimeSettings.cloudSync.ignoreSslErrors = oldIgnoreSsl;
@@ -5067,7 +5165,7 @@ app.post('/api/cloud-sync/push', async (req, res) => {
 app.post('/api/cloud-sync/settings', async (req, res) => {
   try {
     console.log('[cloud-sync settings] Received request:', JSON.stringify(req.body, null, 2));
-    const { enabled, remoteUrl, authToken, pushFrequency, includeSecrets, ignoreSslErrors, authProvider } = req.body;
+    const { enabled, remoteUrl, authToken, pushFrequency, includeSecrets, ignoreSslErrors, authProvider, mirrorUrl, mirrorAuthToken } = req.body;
 
     // Update basic settings
     console.log('[cloud-sync settings] Updating local settings...');
@@ -5141,6 +5239,34 @@ app.post('/api/cloud-sync/settings', async (req, res) => {
       await setupGitRemote(effectiveUrl, authToken || runtimeSettings.cloudSync.authToken);
     }
 
+    // Handle mirror URL and token
+    if (mirrorAuthToken !== undefined) {
+      runtimeSettings.cloudSync.mirrorAuthToken = mirrorAuthToken;
+    }
+
+    if (mirrorUrl !== undefined) {
+      const prevMirrorUrl = runtimeSettings.cloudSync.mirrorUrl;
+      const cleanMirrorUrl = (mirrorUrl || '').trim();
+      runtimeSettings.cloudSync.mirrorUrl = cleanMirrorUrl;
+
+      if (cleanMirrorUrl) {
+        console.log('[cloud-sync settings] Setting up git mirror remote...');
+        await setupGitRemote(
+          cleanMirrorUrl,
+          mirrorAuthToken !== undefined ? mirrorAuthToken : runtimeSettings.cloudSync.mirrorAuthToken,
+          'mirror'
+        );
+      } else if (prevMirrorUrl) {
+        try {
+          await gitExec(['remote', 'remove', 'mirror']);
+          await clearGitHttpAuthHeaders(prevMirrorUrl);
+          console.log('[cloud-sync settings] Removed git remote mirror');
+        } catch (e) {
+          // Mirror remote might not exist
+        }
+      }
+    }
+
     // Apply secrets tracking configuration immediately
     console.log('[cloud-sync settings] Configuring secrets tracking...');
     await configureSecretsTracking(runtimeSettings.cloudSync.includeSecrets);
@@ -5172,7 +5298,12 @@ app.get('/api/cloud-sync/settings', async (req, res) => {
         includeSecrets: runtimeSettings.cloudSync.includeSecrets,
         lastPushTime: runtimeSettings.cloudSync.lastPushTime,
         lastPushStatus: runtimeSettings.cloudSync.lastPushStatus,
-        lastPushError: runtimeSettings.cloudSync.lastPushError
+        lastPushError: runtimeSettings.cloudSync.lastPushError,
+        mirrorUrl: runtimeSettings.cloudSync.mirrorUrl || '',
+        hasMirrorAuthToken: !!runtimeSettings.cloudSync.mirrorAuthToken,
+        lastMirrorPushTime: runtimeSettings.cloudSync.lastMirrorPushTime,
+        lastMirrorPushStatus: runtimeSettings.cloudSync.lastMirrorPushStatus,
+        lastMirrorPushError: runtimeSettings.cloudSync.lastMirrorPushError
       }
     });
   } catch (error) {

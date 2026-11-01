@@ -49,6 +49,8 @@
     ],
     "additional_paths": [],
     "remote_url": "",
+    "mirror_url": "",
+    "mirror_auth_token": "",
     "legacy_arrow_direction": false,
     "exclude": [],
     "exclude_folders": [],
@@ -69,6 +71,8 @@
       "str"
     ],
     "remote_url": "str?",
+    "mirror_url": "str?",
+    "mirror_auth_token": "str?",
     "legacy_arrow_direction": "bool",
     "manual_mode": "bool?",
     "exclude": [

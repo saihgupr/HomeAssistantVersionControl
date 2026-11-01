@@ -1700,6 +1700,17 @@ async function loadCloudSyncSettings() {
         ignoreSslCheckbox.checked = settings.ignoreSslErrors === true;
       }
 
+      const mirrorUrlInput = document.getElementById('cloudMirrorUrl');
+      if (mirrorUrlInput) {
+        mirrorUrlInput.value = settings.mirrorUrl || '';
+      }
+
+      const mirrorAuthTokenInput = document.getElementById('cloudMirrorAuthToken');
+      if (mirrorAuthTokenInput) {
+        mirrorAuthTokenInput.placeholder = settings.hasMirrorAuthToken ? '•••••••••••••••• (configured)' : 'Personal access token (optional)';
+        mirrorAuthTokenInput.value = '';
+      }
+
       // Hide secrets toggle if secrets.yaml is already in exclude_files (making toggle irrelevant)
       const secretsToggleContainer = document.getElementById('secretsToggleContainer');
       if (secretsToggleContainer) {
@@ -1849,6 +1860,10 @@ async function saveCloudSyncSettings(silent = false) {
   const pushFrequency = pushFrequencyElement ? pushFrequencyElement.value : 'manual';
   const includeSecrets = document.getElementById('cloudIncludeSecrets')?.checked ?? false;
   const ignoreSslErrors = document.getElementById('cloudIgnoreSslErrors')?.checked ?? false;
+  const mirrorUrlInput = document.getElementById('cloudMirrorUrl');
+  const mirrorUrl = mirrorUrlInput ? mirrorUrlInput.value.trim() : '';
+  const mirrorAuthTokenInput = document.getElementById('cloudMirrorAuthToken');
+  const mirrorAuthToken = mirrorAuthTokenInput ? mirrorAuthTokenInput.value.trim() : '';
 
   try {
     const payload = {
@@ -1857,8 +1872,12 @@ async function saveCloudSyncSettings(silent = false) {
       pushFrequency,
       includeSecrets,
       ignoreSslErrors,
-      authProvider
+      authProvider,
+      mirrorUrl
     };
+    if (mirrorAuthToken) {
+      payload.mirrorAuthToken = mirrorAuthToken;
+    }
     console.log('[saveCloudSyncSettings] Sending payload:', payload);
 
     const response = await fetch(`${API}/cloud-sync/settings`, {
@@ -2028,23 +2047,86 @@ function updateCloudSyncStatus(settings) {
   const lastPushTime = document.getElementById('cloudLastPushTime');
   const lastPushStatus = document.getElementById('cloudLastPushStatus');
 
-  if (!lastPushTime || !lastPushStatus) return;
+  if (lastPushTime && lastPushStatus) {
+    if (settings.lastPushTime) {
+      const formatted = getFormattedDate(settings.lastPushTime);
+      lastPushTime.textContent = formatted;
 
-  if (settings.lastPushTime) {
-    const formatted = getFormattedDate(settings.lastPushTime);
-    lastPushTime.textContent = formatted;
-
-    if (settings.lastPushStatus === 'success') {
-      lastPushStatus.textContent = '';
-    } else if (settings.lastPushStatus === 'error') {
-      lastPushStatus.textContent = ' ✗ ' + (settings.lastPushError || 'Error');
-      lastPushStatus.style.color = 'var(--danger)';
+      if (settings.lastPushStatus === 'success') {
+        lastPushStatus.textContent = '';
+      } else if (settings.lastPushStatus === 'error') {
+        lastPushStatus.textContent = ' ✗ ' + (settings.lastPushError || 'Error');
+        lastPushStatus.style.color = 'var(--danger)';
+      } else {
+        lastPushStatus.textContent = '';
+      }
     } else {
+      lastPushTime.textContent = 'Never';
       lastPushStatus.textContent = '';
     }
-  } else {
-    lastPushTime.textContent = 'Never';
-    lastPushStatus.textContent = '';
+  }
+
+  const mirrorStatusP = document.getElementById('cloudMirrorStatus');
+  const mirrorLastPushTime = document.getElementById('cloudMirrorLastPushTime');
+  const mirrorLastPushStatus = document.getElementById('cloudMirrorLastPushStatus');
+
+  if (mirrorStatusP && mirrorLastPushTime && mirrorLastPushStatus) {
+    if (settings.mirrorUrl) {
+      mirrorStatusP.style.display = 'block';
+      if (settings.lastMirrorPushTime) {
+        mirrorLastPushTime.textContent = getFormattedDate(settings.lastMirrorPushTime);
+        if (settings.lastMirrorPushStatus === 'success') {
+          mirrorLastPushStatus.textContent = '';
+        } else if (settings.lastMirrorPushStatus === 'error') {
+          mirrorLastPushStatus.textContent = ' ✗ ' + (settings.lastMirrorPushError || 'Error');
+          mirrorLastPushStatus.style.color = 'var(--danger)';
+        } else {
+          mirrorLastPushStatus.textContent = '';
+        }
+      } else {
+        mirrorLastPushTime.textContent = 'Never';
+        mirrorLastPushStatus.textContent = '';
+      }
+    } else {
+      mirrorStatusP.style.display = 'none';
+    }
+  }
+}
+
+async function testMirrorConnection() {
+  const mirrorUrlInput = document.getElementById('cloudMirrorUrl');
+  const mirrorUrl = mirrorUrlInput ? mirrorUrlInput.value.trim() : '';
+  const mirrorTokenInput = document.getElementById('cloudMirrorAuthToken');
+  const authToken = mirrorTokenInput ? mirrorTokenInput.value.trim() : '';
+
+  if (!mirrorUrl) {
+    showNotification('Please enter a mirror repository URL', 'warning', 3000);
+    return;
+  }
+
+  showNotification('Testing mirror connection...', 'info', 2000);
+
+  try {
+    const response = await fetch(`${API}/cloud-sync/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        remoteUrl: mirrorUrl,
+        authToken: authToken || undefined,
+        remoteName: 'mirror',
+        ignoreSslErrors: document.getElementById('cloudIgnoreSslErrors')?.checked ?? false
+      })
+    });
+
+    const data = await response.json();
+    if (data.success) {
+      showNotification('Mirror connection successful!', 'success', 3000);
+    } else {
+      showNotification(`Mirror connection failed: ${data.error}`, 'error', 5000);
+    }
+  } catch (error) {
+    console.error('Mirror test error:', error);
+    showNotification(`Mirror connection error: ${error.message}`, 'error', 5000);
   }
 }
 

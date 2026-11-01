@@ -84,7 +84,7 @@ async function freePort() {
   });
 }
 
-async function startServer(config, { manualMode }) {
+async function startServer(config, { manualMode, env = {} }) {
   const port = await freePort();
   const child = spawn(process.execPath, [SERVER_JS], {
     cwd: path.dirname(SERVER_JS),
@@ -97,6 +97,7 @@ async function startServer(config, { manualMode }) {
       DEBOUNCE_TIME: '1',
       DEBOUNCE_TIME_UNIT: 'seconds',
       WATCHER_INTERVAL: '200',
+      ...env,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -240,4 +241,38 @@ test('switching to manual mode at runtime stops auto-commits; switching back res
 
   await server.post('/runtime-settings', uiSettingsPayload(false));
   assert.equal((await server.health()).fileWatcherActive, true);
+});
+
+test('backup now in manual mode commits every change the user .gitignore allows, except exclusions', async (t) => {
+  const repo = await createUserRepo('backup-now');
+  const { config } = repo;
+  await writeFile(path.join(config, 'script.py'), 'print("v1")\n');
+  await writeFile(path.join(config, 'secrets.yaml'), 'token: old\n');
+  git(config, 'add', '.');
+  git(config, 'commit', '-q', '-m', 'track script and secrets');
+  git(config, 'push', '-q');
+
+  const server = await startServer(config, { manualMode: true, env: { EXCLUDE_FILES: 'secrets.yaml' } });
+  t.after(() => server.stop());
+  const before = await snapshot(repo);
+
+  await writeFile(path.join(config, 'script.py'), 'print("v2")\n');
+  await rm(path.join(config, 'automations.yaml'));
+  await writeFile(path.join(config, 'notes.txt'), 'new file\n');
+  await writeFile(path.join(config, 'debug.log'), 'ignored by the user .gitignore\n');
+  await writeFile(path.join(config, 'secrets.yaml'), 'token: new\n');
+  git(config, 'add', 'secrets.yaml'); // exclusions are a hard gate, even for pre-staged files
+
+  const res = await server.post('/git/add-all-and-commit', {});
+  assert.equal(res.body.success, true, JSON.stringify(res.body));
+
+  const committed = git(config, 'show', '--name-status', '--format=', 'HEAD').split('\n').sort();
+  assert.deepEqual(committed, ['A\tnotes.txt', 'D\tautomations.yaml', 'M\tscript.py']);
+  assert.equal(git(config, 'rev-list', '--count', 'HEAD'), String(Number(before.commitCount) + 1));
+  assert.equal(git(config, 'status', '--porcelain'), 'M secrets.yaml', 'secrets.yaml stays modified and unstaged');
+  assert.equal(git(repo.remote, 'rev-parse', 'main'), before.remoteHead, 'nothing is pushed');
+
+  const again = await server.post('/git/add-all-and-commit', {});
+  assert.equal(again.body.message, 'No changes to commit.');
+  assert.equal(git(config, 'rev-list', '--count', 'HEAD'), String(Number(before.commitCount) + 1));
 });

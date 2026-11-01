@@ -1248,6 +1248,41 @@ async function filterGitIgnoredFiles(files) {
 }
 
 /**
+ * Stage every change in a user-managed repository, like `git add -A`: the user's
+ * .gitignore decides what belongs in the repo, so deletions and files of any type are
+ * included. Configured exclusions stay a hard gate and are never staged, even if they
+ * were staged beforehand.
+ */
+async function stageAllForManualBackup() {
+  const excluded = [
+    ...(runtimeSettings.extensions.exclude || []),
+    ...(runtimeSettings.extensions.excludeFolders || []),
+  ]
+    .map(p => p.replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''))
+    .filter(Boolean);
+
+  await gitExec(['add', '-A', '--', '.', ...excluded.map(p => `:(exclude,literal)${p}`)]);
+  if (excluded.length === 0) return;
+
+  const excludedPathspecs = excluded.map(p => `:(literal)${p}`);
+  const stagedExcluded = (await gitRaw(['diff', '--cached', '--name-only', '--', ...excludedPathspecs])).trim();
+  if (!stagedExcluded) return;
+
+  console.log(`[add-all-and-commit] Unstaging excluded paths:\n${stagedExcluded}`);
+  let hasHead = true;
+  try {
+    await gitExec(['rev-parse', '--verify', '-q', 'HEAD']);
+  } catch {
+    hasHead = false;
+  }
+  if (hasHead) {
+    await gitExec(['reset', '-q', '--', ...excludedPathspecs]);
+  } else {
+    await gitExec(['rm', '-r', '-q', '--cached', '--ignore-unmatch', '--', ...excludedPathspecs]);
+  }
+}
+
+/**
  * Find all nested .git directories
  * @returns {Promise<Array<string>>} List of relative paths to directories containing .git
  */
@@ -2360,14 +2395,17 @@ app.post('/api/git/add-all-and-commit', async (req, res) => {
   try {
     ensureGitInitialized();
     console.log('[add-all-and-commit] Adding all config files and committing...');
-    const rawConfigFiles = await getConfigFiles();
-    const configFiles = await filterGitIgnoredFiles(rawConfigFiles);
-    console.log(`[add-all-and-commit] Found ${configFiles.length} non-ignored config files to add`);
-    if (configFiles.length > 0) {
-      await gitAdd(configFiles);
+    if (runtimeSettings.manualMode) {
+      await stageAllForManualBackup();
+    } else {
+      const rawConfigFiles = await getConfigFiles();
+      const configFiles = await filterGitIgnoredFiles(rawConfigFiles);
+      console.log(`[add-all-and-commit] Found ${configFiles.length} non-ignored config files to add`);
+      if (configFiles.length > 0) {
+        await gitAdd(configFiles);
+      }
     }
-    const status = await gitStatus();
-    if (status.isClean()) {
+    if ((await gitRaw(['diff', '--cached', '--name-only'])).trim() === '') {
       console.log('[add-all-and-commit] No changes to commit.');
       return res.json({ success: true, message: 'No changes to commit.' });
     }
@@ -2375,7 +2413,7 @@ app.post('/api/git/add-all-and-commit', async (req, res) => {
     await gitCommit(commitMessage);
     console.log(`[add-all-and-commit] Committed: ${commitMessage}`);
     await triggerAutoPushIfConfigured();
-    res.json({ success: true, message: `All ${configFiles.length} config files added and committed.` });
+    res.json({ success: true, message: 'All changes committed.' });
   } catch (error) {
     console.error('[add-all-and-commit] Error:', error);
     res.status(500).json({ success: false, error: error.message });

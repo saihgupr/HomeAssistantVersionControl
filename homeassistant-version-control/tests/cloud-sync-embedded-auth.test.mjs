@@ -190,8 +190,11 @@ test('Cloud Sync extracts embedded username:password in remoteUrl, configures ex
     try {
       const res = await fetch(`${base}/health`);
       if (res.ok) {
-        ready = true;
-        break;
+        const data = await res.json();
+        if (data.gitInitialized) {
+          ready = true;
+          break;
+        }
       }
     } catch {}
     await new Promise(r => setTimeout(r, 200));
@@ -303,8 +306,11 @@ test('Cloud Sync extracts embedded personal access token in remoteUrl and config
     try {
       const res = await fetch(`${base}/health`);
       if (res.ok) {
-        ready = true;
-        break;
+        const data = await res.json();
+        if (data.gitInitialized) {
+          ready = true;
+          break;
+        }
       }
     } catch {}
     await new Promise(r => setTimeout(r, 200));

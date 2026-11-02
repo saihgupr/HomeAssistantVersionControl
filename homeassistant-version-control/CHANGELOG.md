@@ -2,12 +2,9 @@
 
 ## [1.5.1]
 
-### Added
-- **Confetti Mode Polish:** Smoother celebration animations and visual effects.
-
 ### Fixed & Improved
 - **Mask Remote Credentials in Logs (#51):** Masks embedded authentication tokens in git remote URLs when logging during startup initialization and settings migration, preventing credentials from appearing in clear text in Home Assistant logs and diagnostics.
-- **Confetti Mode Settings Sync:** Fixed toggle state inversion and ensured preferences accurately persist.
+- **Confetti Mode & Settings Sync:** Fixed toggle state inversion, ensured preferences accurately persist, and polished celebration animations for smoother visual effects.
 
 ## [1.5.0]
 

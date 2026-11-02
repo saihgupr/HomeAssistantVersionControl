@@ -1,13 +1,13 @@
 # Changelog
 
-## [Unreleased]
+## [1.5.1]
 
 ### Added
-- **Upgraded Confetti Mode:** Completely overhauled Confetti Mode into a volumetric 3D celebration cascade. Features dual-corner sky-launch cannons, an overhead cascading ticker-tape curtain drop, realistic aerodynamic leaf-flutter with terminal velocity physics, 3-layer parallax depth (foreground, midground, background), metallic gold/silver foil specular glints, and twisting ribbon streamers for a majestic 5–7 second celebration.
+- **Confetti Mode Polish:** Smoother celebration animations and visual effects.
 
 ### Fixed & Improved
 - **Mask Remote Credentials in Logs (#51):** Masks embedded authentication tokens in git remote URLs when logging during startup initialization and settings migration, preventing credentials from appearing in clear text in Home Assistant logs and diagnostics.
-- **Confetti Mode Settings Sync:** Fixed toggle inversion bug and ensured Confetti Mode accurately syncs with `localStorage` when opening settings and saving preferences.
+- **Confetti Mode Settings Sync:** Fixed toggle state inversion and ensured preferences accurately persist.
 
 ## [1.5.0]
 

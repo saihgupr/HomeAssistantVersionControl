@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5.2]
+
+### Fixed & Improved
+- **Preserve Embedded Remote Credentials (#57):** Fixed an issue where configuring Cloud Sync with custom Git remotes (e.g. Gitea, Forgejo, GitLab, self-hosted) or add-on `remote_url` containing embedded credentials (`user:pass@` or `token@`) resulted in authentication being dropped during automatic pushes and connection tests, causing `fatal: could not read Username ... terminal prompts disabled`. Embedded credentials are now automatically extracted and configured via `http.<url>.extraHeader` while keeping the git remote URL clean on disk.
+
 ## [1.5.1]
 
 ### Fixed & Improved

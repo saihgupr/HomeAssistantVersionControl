@@ -80,7 +80,7 @@ const DATA_DIR = process.env.DATA_PATH || '/data';
  */
 function maskUrl(url) {
   if (!url || typeof url !== 'string') return '';
-  return url.replace(/:\/\/([^@/]+)@/, '://***@');
+  return url.replace(/:\/\/([^/]+)@/, '://***@');
 }
 
 // Ensure HOME is set for git & SSH compatibility
@@ -1562,6 +1562,16 @@ async function initRepo() {
       if (config.remote_url && config.remote_url.trim() !== '' && config.remote_url !== runtimeSettings.cloudSync.remoteUrl) {
         console.log(`[init] Remote URL from config: ${maskUrl(config.remote_url)}`);
         runtimeSettings.cloudSync.remoteUrl = config.remote_url;
+
+        // Extract embedded auth if present and no authToken set
+        const remoteAuthMatch = config.remote_url.match(/^https?:\/\/([^/]+)@/i);
+        if (remoteAuthMatch && !runtimeSettings.cloudSync.authToken) {
+          try {
+            runtimeSettings.cloudSync.authToken = decodeURIComponent(remoteAuthMatch[1]);
+          } catch {
+            runtimeSettings.cloudSync.authToken = remoteAuthMatch[1];
+          }
+        }
 
         // Auto-detect provider if not set
         if (!runtimeSettings.cloudSync.authProvider) {
@@ -4376,10 +4386,20 @@ async function clearGitHttpAuthHeaders() {
 async function setupGitRemote(url, token) {
   assertAutoManaged('Configuring the git remote');
   try {
-    let cleanUrl = (url || '').trim();
+    let rawUrl = (url || '').trim();
+    let cleanUrl = rawUrl;
+    let embeddedAuth = '';
 
-    // Strip any previously embedded credentials from url
-    cleanUrl = cleanUrl.replace(/:\/\/[^@]+@/, '://');
+    // Check if URL has credentials embedded (HTTP/HTTPS)
+    const httpAuthMatch = rawUrl.match(/^https?:\/\/([^/]+)@/i);
+    if (httpAuthMatch) {
+      try {
+        embeddedAuth = decodeURIComponent(httpAuthMatch[1]);
+      } catch {
+        embeddedAuth = httpAuthMatch[1];
+      }
+      cleanUrl = cleanUrl.replace(/^(https?:\/\/)[^/]+@/i, '$1');
+    }
 
     // Robust helper to compare repo slug between HTTPS and SSH URLs
     const parseRepoSlug = (u) => {
@@ -4426,16 +4446,20 @@ async function setupGitRemote(url, token) {
     if (!isSsh && (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://'))) {
       await clearGitHttpAuthHeaders();
 
-      if (token) {
-        const credentials = token.includes(':') ? token : `${token}:`;
+      const effectiveToken = token || embeddedAuth;
+      if (effectiveToken) {
+        const credentials = effectiveToken.includes(':') ? effectiveToken : `${effectiveToken}:`;
         const base64Auth = Buffer.from(credentials).toString('base64');
         const configKey = `http.${cleanUrl}.extraHeader`;
         await gitExec(['config', configKey, `Authorization: Basic ${base64Auth}`]);
 
         // Also configure without .git suffix if cleanUrl ends with .git (for subpath matching)
+        // or with .git if cleanUrl doesn't have it
         if (cleanUrl.endsWith('.git')) {
           const stripped = cleanUrl.slice(0, -4);
           await gitExec(['config', `http.${stripped}.extraHeader`, `Authorization: Basic ${base64Auth}`]);
+        } else {
+          await gitExec(['config', `http.${cleanUrl}.git.extraHeader`, `Authorization: Basic ${base64Auth}`]);
         }
         console.log('[cloud-sync] Configured git extraHeader authentication');
       }
@@ -5090,6 +5114,18 @@ app.post('/api/cloud-sync/settings', async (req, res) => {
     if (pushFrequency !== undefined) runtimeSettings.cloudSync.pushFrequency = pushFrequency;
     if (includeSecrets !== undefined) runtimeSettings.cloudSync.includeSecrets = includeSecrets;
     if (ignoreSslErrors !== undefined) runtimeSettings.cloudSync.ignoreSslErrors = ignoreSslErrors;
+
+    // If embedded credentials are in remoteUrl and no separate authToken was provided, store them
+    if (!authToken && remoteUrl) {
+      const authMatch = (remoteUrl || '').match(/^https?:\/\/([^/]+)@/i);
+      if (authMatch) {
+        try {
+          runtimeSettings.cloudSync.authToken = decodeURIComponent(authMatch[1]);
+        } catch {
+          runtimeSettings.cloudSync.authToken = authMatch[1];
+        }
+      }
+    }
 
     // Handle provider and URL switching
     const oldProvider = runtimeSettings.cloudSync.authProvider;

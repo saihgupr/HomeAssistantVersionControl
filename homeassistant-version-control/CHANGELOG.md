@@ -3,18 +3,10 @@
 ## [Unreleased]
 
 ### Added
-- **Secondary "Mirror" Remote for Cloud Sync (#55):** Added optional secondary git remote support (`mirror_url` and `mirror_auth_token`) for redundant off-site backups (e.g. self-hosted Gitea/GitLab alongside GitHub), drift detection, or audit copies. When configured, cloud sync pushes to `origin` first and then to `mirror`. Mirror push failures are non-fatal and will not block origin sync. Fully disabled by default with zero behavior change for existing setups.
 - **Upgraded Confetti Mode:** Completely overhauled Confetti Mode into a volumetric 3D celebration cascade. Features dual-corner sky-launch cannons, an overhead cascading ticker-tape curtain drop, realistic aerodynamic leaf-flutter with terminal velocity physics, 3-layer parallax depth (foreground, midground, background), metallic gold/silver foil specular glints, and twisting ribbon streamers for a majestic 5–7 second celebration.
 
 ### Fixed & Improved
-- **Confetti Mode Settings Sync:** Fixed toggle inversion bug and ensured Confetti Mode accurately syncs with `localStorage` when opening settings and saving preferences.
-
-## [Unreleased]
-
-### Added
-- **Upgraded Confetti Mode:** Completely overhauled Confetti Mode into a volumetric 3D celebration cascade. Features dual-corner sky-launch cannons, an overhead cascading ticker-tape curtain drop, realistic aerodynamic leaf-flutter with terminal velocity physics, 3-layer parallax depth (foreground, midground, background), metallic gold/silver foil specular glints, and twisting ribbon streamers for a majestic 5–7 second celebration.
-
-### Fixed & Improved
+- **Mask Remote Credentials in Logs (#51):** Masks embedded authentication tokens in git remote URLs when logging during startup initialization and settings migration, preventing credentials from appearing in clear text in Home Assistant logs and diagnostics.
 - **Confetti Mode Settings Sync:** Fixed toggle inversion bug and ensured Confetti Mode accurately syncs with `localStorage` when opening settings and saving preferences.
 
 ## [1.5.0]

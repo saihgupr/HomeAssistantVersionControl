@@ -71,6 +71,17 @@ const PORT = process.env.PORT || 54001;
 const HOST = process.env.HOST || '::';
 const EXTERNAL_MIRROR_DIR = '.havc_external';
 const ALLOWED_ADDITIONAL_PATH_PREFIXES = ['/share', '/media', '/ssl', '/config', '/addon_configs'];
+const DATA_DIR = process.env.DATA_PATH || '/data';
+
+/**
+ * Mask embedded credentials in URLs for safe logging
+ * @param {string} url - Raw URL potentially containing tokens/passwords
+ * @returns {string} Masked URL with credentials replaced by ***
+ */
+function maskUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  return url.replace(/:\/\/([^@/]+)@/, '://***@');
+}
 
 // Ensure HOME is set for git & SSH compatibility
 if (!process.env.HOME) {
@@ -1057,7 +1068,7 @@ async function loadRuntimeSettings() {
 
   // Layer 2: Apply file settings (highest precedence)
   try {
-    const settingsPath = '/data/runtime-settings.json';
+    const settingsPath = path.join(DATA_DIR, 'runtime-settings.json');
     try {
       await fsPromises.access(settingsPath, fs.constants.F_OK);
       const settingsData = await fsPromises.readFile(settingsPath, 'utf-8');
@@ -1115,7 +1126,7 @@ async function loadRuntimeSettings() {
  */
 async function saveRuntimeSettings() {
   try {
-    const settingsPath = '/data/runtime-settings.json';
+    const settingsPath = path.join(DATA_DIR, 'runtime-settings.json');
     console.log(`[settings] Saving settings to ${settingsPath}...`);
 
     await fsPromises.writeFile(settingsPath, JSON.stringify(runtimeSettings, null, 2), 'utf-8');
@@ -1474,7 +1485,7 @@ async function initRepo() {
 
     // Also check for config.json in the data directory
     try {
-      const configData = await fsPromises.readFile('/data/options.json', 'utf-8');
+      const configData = await fsPromises.readFile(path.join(DATA_DIR, 'options.json'), 'utf-8');
       const config = JSON.parse(configData);
       if (config.liveConfigPath) {
         CONFIG_PATH = config.liveConfigPath;
@@ -1549,7 +1560,7 @@ async function initRepo() {
 
       // Handle remote_url from config.json
       if (config.remote_url && config.remote_url.trim() !== '' && config.remote_url !== runtimeSettings.cloudSync.remoteUrl) {
-        console.log(`[init] Remote URL from config: ${config.remote_url}`);
+        console.log(`[init] Remote URL from config: ${maskUrl(config.remote_url)}`);
         runtimeSettings.cloudSync.remoteUrl = config.remote_url;
 
         // Auto-detect provider if not set
@@ -1787,7 +1798,7 @@ async function initRepo() {
 
     // Apply pending remote update from config
     if (global.pendingRemoteUpdate && runtimeSettings.cloudSync.remoteUrl && !runtimeSettings.manualMode) {
-      console.log(`[init] Applying pending remote URL update: ${runtimeSettings.cloudSync.remoteUrl}`);
+      console.log(`[init] Applying pending remote URL update: ${maskUrl(runtimeSettings.cloudSync.remoteUrl)}`);
       const remoteResult = await setupGitRemote(runtimeSettings.cloudSync.remoteUrl, runtimeSettings.cloudSync.authToken);
       if (remoteResult.success) {
         console.log('[init] Successfully updated git remote from config');
@@ -5066,7 +5077,10 @@ app.post('/api/cloud-sync/push', async (req, res) => {
 // Save cloud sync settings
 app.post('/api/cloud-sync/settings', async (req, res) => {
   try {
-    console.log('[cloud-sync settings] Received request:', JSON.stringify(req.body, null, 2));
+    const sanitizedBody = { ...req.body };
+    if (sanitizedBody.remoteUrl) sanitizedBody.remoteUrl = maskUrl(sanitizedBody.remoteUrl);
+    if (sanitizedBody.authToken) sanitizedBody.authToken = '***';
+    console.log('[cloud-sync settings] Received request:', JSON.stringify(sanitizedBody, null, 2));
     const { enabled, remoteUrl, authToken, pushFrequency, includeSecrets, ignoreSslErrors, authProvider } = req.body;
 
     // Update basic settings
@@ -5097,14 +5111,14 @@ app.post('/api/cloud-sync/settings', async (req, res) => {
       } else if (runtimeSettings.cloudSync.githubRemoteUrl) {
         // Restore stored GitHub URL
         effectiveUrl = runtimeSettings.cloudSync.githubRemoteUrl;
-        console.log('[cloud-sync settings] Restored GitHub URL:', effectiveUrl);
+        console.log('[cloud-sync settings] Restored GitHub URL:', maskUrl(effectiveUrl));
       } else {
         // Fallback: check if current remoteUrl is a GitHub URL (migration case)
         const currentUrl = runtimeSettings.cloudSync.remoteUrl || '';
         if (currentUrl.includes('github.com')) {
           effectiveUrl = currentUrl;
           runtimeSettings.cloudSync.githubRemoteUrl = currentUrl;
-          console.log('[cloud-sync settings] Migrated GitHub URL from remoteUrl:', effectiveUrl);
+          console.log('[cloud-sync settings] Migrated GitHub URL from remoteUrl:', maskUrl(effectiveUrl));
         } else {
           console.log('[cloud-sync settings] No GitHub URL found - user needs to connect GitHub');
         }
@@ -5118,14 +5132,14 @@ app.post('/api/cloud-sync/settings', async (req, res) => {
       } else if (runtimeSettings.cloudSync.customRemoteUrl) {
         // Restore stored custom URL
         effectiveUrl = runtimeSettings.cloudSync.customRemoteUrl;
-        console.log('[cloud-sync settings] Restored Custom URL:', effectiveUrl);
+        console.log('[cloud-sync settings] Restored Custom URL:', maskUrl(effectiveUrl));
       } else {
         // Fallback: check if current remoteUrl is NOT a GitHub URL
         const currentUrl = runtimeSettings.cloudSync.remoteUrl || '';
         if (currentUrl && !currentUrl.includes('github.com')) {
           effectiveUrl = currentUrl;
           runtimeSettings.cloudSync.customRemoteUrl = currentUrl;
-          console.log('[cloud-sync settings] Migrated Custom URL from remoteUrl:', effectiveUrl);
+          console.log('[cloud-sync settings] Migrated Custom URL from remoteUrl:', maskUrl(effectiveUrl));
         }
       }
     }

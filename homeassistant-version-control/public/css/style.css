@@ -1067,6 +1067,27 @@ input:checked+.toggle-slider:before {
   background: var(--bg-tertiary);
 }
 
+/* === Settings GitHub footer === */
+.settings-github-footer {
+  padding: 6px 0 4px;
+  text-align: center;
+}
+
+.settings-github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.settings-github-link:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
 /* === Commit Info === */
 .commit-info {
   background: var(--bg-tertiary);

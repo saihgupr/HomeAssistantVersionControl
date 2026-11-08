@@ -208,11 +208,20 @@ test('cloud sync cannot touch the remote, .gitignore or history in manual mode',
     pushFrequency: 'manual',
   });
   const testConn = await server.post('/cloud-sync/test', { remoteUrl: 'https://example.invalid/other.git' });
+  const mirrorSettings = await server.post('/cloud-sync/settings', {
+    mirrorUrl: 'https://example.invalid/mirror.git',
+  });
+  const mirrorTest = await server.post('/cloud-sync/test', {
+    remoteUrl: 'https://example.invalid/mirror.git',
+    remoteName: 'mirror',
+  });
   const push = await server.post('/cloud-sync/push', { force: true });
   const disconnect = await server.post('/github/disconnect', {});
 
   assert.equal(settings.body.success, false, 'cloud sync settings should be refused');
   assert.equal(testConn.body.success, false, 'connection test should be refused');
+  assert.equal(mirrorSettings.body.success, false, 'mirror settings should be refused in manual mode');
+  assert.equal(mirrorTest.body.success, false, 'mirror connection test should be refused in manual mode');
   assert.equal(push.body.success, false, 'push should be refused');
   assert.equal(disconnect.body.success, true, 'disconnect only clears HAVC settings');
   assert.deepEqual(await snapshot(repo), before);

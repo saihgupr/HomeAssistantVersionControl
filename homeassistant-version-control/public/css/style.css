@@ -2316,6 +2316,23 @@ input[type=number] {
   appearance: textfield;
 }
 
+/* Suppress browser / WebKit credential and contact autofill icons */
+input::-webkit-credentials-auto-fill-button {
+  visibility: hidden !important;
+  display: none !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  right: 0 !important;
+}
+
+input::-webkit-contacts-auto-fill-button {
+  visibility: hidden !important;
+  display: none !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  right: 0 !important;
+}
+
 .spinner-btn:hover svg {
   stroke: var(--text-primary) !important;
 }

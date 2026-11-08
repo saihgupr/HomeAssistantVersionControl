@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.6.0]
 
 ### Added
 - **Secondary "Mirror" Remote for Cloud Sync (#55):** Added optional secondary git remote support (`mirror_url` and `mirror_auth_token`) for redundant off-site backups (e.g. self-hosted Gitea/GitLab alongside GitHub), drift detection, or audit copies. When configured, cloud sync pushes to `origin` first and then to `mirror`. Mirror push failures are non-fatal and will not block origin sync. Fully disabled by default with zero behavior change for existing setups.

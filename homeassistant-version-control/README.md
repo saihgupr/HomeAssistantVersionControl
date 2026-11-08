@@ -375,9 +375,14 @@ The app automatically tracks configuration files while ignoring system files.
 | `automations.yaml`, `scripts.yaml` | Log files (`*.log`) |
 | `secrets.yaml` | Python cache (`__pycache__`) |
 | Lovelace dashboards (`.storage/lovelace*`) | Binary files (Images, Videos) |
-| `esphome/*.yaml` | Temporary files |
+| `esphome/*.yaml` (unless the folder has its own `.git`) | Temporary files |
 | All other `.yaml` and `.yml` files | Files in `.gitignore` |
 | Files in `.storage/` | Temporary files |
+
+### Nested Git Repositories
+Any folder under `/config` that contains its own `.git` is excluded from tracking, along with everything inside it. This covers integrations that keep their own history, such as an ESPHome folder that was initialized as a repository, and it stops git from recording them as broken submodules.
+
+If you want those files in your Home Assistant history, remove or rename the nested `.git` directory and run a sync. The ignore entries are regenerated on the next sync without it. If you would rather keep that repository, back it up separately by giving it its own remote.
 
 ### Automatic Branch Detection
 The app is branch-agnostic and will automatically detect the active branch of your repository. 

@@ -93,6 +93,15 @@ test('startup masks embedded tokens in config.remote_url and options.json', asyn
   }
 
   assert.ok(ready, `Server failed to start:\n${logs}`);
+
+  // The remote URL is logged from the background init that runs after the HTTP
+  // server starts listening, so the health endpoint can answer before that line
+  // exists. Wait for it instead of assuming it is already there.
+  const logDeadline = Date.now() + 15000;
+  while (Date.now() < logDeadline && !logs.includes('https://***@github.com/org/repo.git')) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
+
   assert.ok(!logs.includes(SECRET_TOKEN), `Secret token was leaked in startup logs:\n${logs}`);
   assert.ok(logs.includes('https://***@github.com/org/repo.git'), `Masked URL not found in logs:\n${logs}`);
 });

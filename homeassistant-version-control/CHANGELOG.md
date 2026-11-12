@@ -1,10 +1,14 @@
 # Changelog
 
-## [Unreleased]
+## [1.6.0]
 
 ### Added
+- **Secondary "Mirror" Remote for Cloud Sync (#55):** Added optional secondary git remote support (`mirror_url` and `mirror_auth_token`) for redundant off-site backups (e.g. self-hosted Gitea/GitLab alongside GitHub), drift detection, or audit copies. When configured, cloud sync pushes to `origin` first and then to `mirror`. Mirror push failures are non-fatal and will not block origin sync. Fully disabled by default with zero behavior change for existing setups.
 - **Auto-reload Changed Components:** Optional setting that reloads the matching Home Assistant domain after each automatic backup. Covers automations, scripts, scenes, groups, inputs, timers, counters, template entities, command_line, HomeKit, and customize. Off by default; requires the Home Assistant API (add-on mode or `HA_URL` plus a token in Docker).
 - **Home Assistant Tweaks Integration:** Pair with [Home Assistant Tweaks](https://github.com/saihgupr/HomeAssistantTweaks) to browse and restore versions from the native automation and script editors.
+
+### Fixed & Improved
+- **Cleaner Cloud Sync Fields:** Token inputs no longer show the browser's password and autofill icons.
 
 ## [1.5.2]
 

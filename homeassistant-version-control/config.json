@@ -1,6 +1,6 @@
 {
   "name": "Home Assistant Version Control",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "slug": "home-assistant-version-control",
   "description": "Git-powered version control and automated backup for your Home Assistant configuration files.",
   "url": "https://github.com/saihgupr/HomeAssistantVersionControl",
@@ -49,6 +49,8 @@
     ],
     "additional_paths": [],
     "remote_url": "",
+    "mirror_url": "",
+    "mirror_auth_token": "",
     "legacy_arrow_direction": false,
     "exclude": [],
     "exclude_folders": [],
@@ -70,6 +72,8 @@
       "str"
     ],
     "remote_url": "str?",
+    "mirror_url": "str?",
+    "mirror_auth_token": "str?",
     "legacy_arrow_direction": "bool",
     "manual_mode": "bool?",
     "auto_reload": "bool?",

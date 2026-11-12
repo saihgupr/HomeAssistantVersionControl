@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.6.1]
+
+### Fixed & Improved
+- **Readable Diffs on Mobile:** Diffs now default to the stacked (unified) view on screens 768px wide or narrower, while desktop keeps your saved side-by-side or unified preference. Switching views on mobile is session-only and never overwrites the desktop setting.
+
 ## [1.6.0]
 
 ### Added
@@ -9,7 +14,6 @@
 
 ### Fixed & Improved
 - **Cleaner Cloud Sync Fields:** Token inputs no longer show the browser's password and autofill icons.
-- **Readable Diffs on Mobile:** Diffs now default to the stacked (unified) view on screens 768px wide or narrower, while desktop keeps your saved side-by-side or unified preference. Switching views on mobile is session-only and never overwrites the desktop setting.
 
 ## [1.5.2]
 

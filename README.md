@@ -72,7 +72,23 @@ v1.6 focuses on cloud sync and hands-free reloads.
 * **Chronological Feed:** View changes grouped by "Today," "Yesterday," and "Earlier."
 * **Visual Comparisons:** Compare the current version against any backup side-by-side. Additions are highlighted in **green**, deletions in **red**.
 * **History Management:** Automatically merges versions older than the specified time period to keep your history clean.
-* **Editor Integration:** With [Home Assistant Tweaks](https://github.com/saihgupr/HomeAssistantTweaks), browse and restore versions directly in the native automation and script editors.
+* **Editor Integration:** With [Home Assistant Tweaks](https://github.com/saihgupr/HomeAssistantTweaks#recover-earlier-versions-of-automations-and-scripts), browse and restore versions directly in the native automation and script editors.
+
+### Home Assistant Tweaks Integration
+
+Run [Home Assistant Tweaks](https://github.com/saihgupr/HomeAssistantTweaks#recover-earlier-versions-of-automations-and-scripts) alongside this app and the native automation and script editors gain a version history control.
+
+* **Step through versions:** Use the arrows next to the date to move back and forward through earlier saves of the automation or script you are editing.
+* **Preview in place:** The editor shows the selected version before you restore it.
+* **Restore by saving:** Save the editor to make the selected version current again.
+* **Open the full history:** Click the date to open the complete version list with search.
+* **Only when available:** The control appears only when this app is installed and reachable. The rest of the Tweaks features work on their own.
+
+<p align="center">
+  <a href="https://github.com/saihgupr/HomeAssistantTweaks#recover-earlier-versions-of-automations-and-scripts" target="_blank" rel="noopener">
+    <img src="https://github.com/saihgupr/HomeAssistantVersionControl/raw/develop/images/screenshots/version-control-button.png" width="360" alt="Close-up of the version history control in the automation editor" />
+  </a>
+</p>
 
 ### Instant Restore
 * **Granular Control:** Restore specific files or revert your entire configuration.

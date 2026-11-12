@@ -1878,6 +1878,8 @@ body.dark-mode .diff-expand-separator {
   user-select: none;
   border-right: 1px solid var(--border-subtle);
   background: var(--bg-elevated);
+  white-space: nowrap;
+  word-break: normal;
 }
 
 .diff-line-text {
@@ -3136,6 +3138,11 @@ body:not(.dark-mode) .mobile-tab-bar {
     padding: 3px 6px;
     white-space: pre-wrap;
     word-break: break-all;
+  }
+
+  .diff-line-num {
+    min-width: 40px;
+    font-size: 11px;
   }
 
   .diff-line .line-num {

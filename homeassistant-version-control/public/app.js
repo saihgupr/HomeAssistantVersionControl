@@ -132,7 +132,39 @@ async function copyToClipboard(text) {
 }
 
 // Diff view format management
+// The stored preference applies to desktop. Mobile defaults to stacked (unified)
+// so side-by-side diffs stay readable on narrow screens.
 let diffViewFormat = localStorage.getItem('diffViewFormat') || 'split';
+
+// Session-only mobile override. Not persisted, so returning to mobile always
+// starts from the stacked default again.
+let mobileDiffViewFormat = null;
+
+const MOBILE_DIFF_QUERY = '(max-width: 768px)';
+
+function isMobileDiffView() {
+  if (typeof window.matchMedia === 'function') {
+    return window.matchMedia(MOBILE_DIFF_QUERY).matches;
+  }
+  return window.innerWidth <= 768;
+}
+
+function getEffectiveDiffViewFormat() {
+  if (isMobileDiffView()) {
+    return mobileDiffViewFormat || 'unified';
+  }
+  return diffViewFormat;
+}
+
+function syncDiffViewFormatControls() {
+  const splitEl = document.getElementById('diffViewSplit');
+  const unifiedEl = document.getElementById('diffViewUnified');
+  if (!splitEl || !unifiedEl) return;
+
+  const format = getEffectiveDiffViewFormat();
+  splitEl.checked = format === 'split';
+  unifiedEl.checked = format === 'unified';
+}
 
 // Diff mode management - 'shifted' shows what each version changed, 'standard' is normal
 let diffMode = localStorage.getItem('diffMode') || 'shifted';
@@ -416,15 +448,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 
   // Load diff view format setting (radio buttons)
-  const diffViewSplit = document.getElementById('diffViewSplit');
-  const diffViewUnified = document.getElementById('diffViewUnified');
-  if (diffViewSplit && diffViewUnified) {
-    if (diffViewFormat === 'split') {
-      diffViewSplit.checked = true;
-    } else {
-      diffViewUnified.checked = true;
-    }
-  }
+  syncDiffViewFormatControls();
 
   // Load diff mode setting (checkbox toggle)
   const diffModeShifted = document.getElementById('diffModeShifted');
@@ -470,6 +494,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // Initialize mobile interactions and gestures
   initMobileInteractions();
+  initDiffViewResponsiveDefault();
 
   // Initialize the view
   switchMode(currentMode);
@@ -1127,8 +1152,14 @@ function switchDiffStyle(styleId) {
 
 function toggleDiffViewFormat(isSplit) {
   const newFormat = isSplit ? 'split' : 'unified';
-  diffViewFormat = newFormat;
-  localStorage.setItem('diffViewFormat', newFormat);
+
+  if (isMobileDiffView()) {
+    // Session-only on mobile so the desktop preference is left untouched
+    mobileDiffViewFormat = newFormat;
+  } else {
+    diffViewFormat = newFormat;
+    localStorage.setItem('diffViewFormat', newFormat);
+  }
   // showNotification(`Diff view: ${isSplit ? 'Side-by-Side' : 'Unified'}`, 'success', 1500);
 
   // Re-render the currently displayed view
@@ -1412,7 +1443,9 @@ async function saveSettings(closeOnSave = true) {
   const autoReload = autoReloadEl ? autoReloadEl.checked : false;
 
   const diffViewSplit = document.getElementById('diffViewSplit') ? document.getElementById('diffViewSplit').checked : false;
-  const newDiffViewFormat = diffViewSplit ? 'split' : 'unified';
+  // Mobile diffs are forced stacked and may carry a session-only override, so
+  // never let mobile radio state overwrite the saved desktop preference.
+  const newDiffViewFormat = isMobileDiffView() ? diffViewFormat : (diffViewSplit ? 'split' : 'unified');
   const diffStyleEl = document.getElementById('diffStyle');
   const newDiffStyle = diffStyleEl ? diffStyleEl.value : currentDiffStyle;
 
@@ -2855,6 +2888,25 @@ function initMobileInteractions() {
         input.addEventListener('input', () => triggerAutoSaveSettings());
       }
     });
+  }
+}
+
+function initDiffViewResponsiveDefault() {
+  if (typeof window.matchMedia !== 'function') return;
+
+  const mediaQuery = window.matchMedia(MOBILE_DIFF_QUERY);
+  const handleBreakpointChange = () => {
+    // Every entry into mobile starts from the stacked default; desktop goes
+    // back to the saved preference.
+    mobileDiffViewFormat = null;
+    syncDiffViewFormatControls();
+    refreshCurrentView();
+  };
+
+  if (mediaQuery.addEventListener) {
+    mediaQuery.addEventListener('change', handleBreakpointChange);
+  } else if (mediaQuery.addListener) {
+    mediaQuery.addListener(handleBreakpointChange);
   }
 }
 
@@ -5653,8 +5705,8 @@ function generateDiff(oldText, newText, options = {}) {
   // Generate style switcher was removed - now in settings
   const styleSwitcherHtml = '';
 
-  // Choose rendering based on user preference
-  if (diffViewFormat === 'split') {
+  // Choose rendering based on the effective preference (mobile defaults to stacked)
+  if (getEffectiveDiffViewFormat() === 'split') {
     return `
       ${styleSwitcherHtml}
       <div class="segmented-control" style="cursor: pointer;" onclick="cycleDiffStyle()" title="Click to cycle diff styles">

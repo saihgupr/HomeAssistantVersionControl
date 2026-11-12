@@ -984,13 +984,31 @@ input:checked+.toggle-slider:before {
   max-height: 75vh;
 }
 
+/* Settings body is a flex column so the links row can anchor to the bottom */
+#settingsModal .modal-content {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0;
+}
+
 /* === Settings Groups === */
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+}
+
 .settings-group {
   margin-bottom: 24px;
 }
 
 .settings-group:last-child {
   margin-bottom: 0;
+}
+
+/* Confetti Mode sits 40px below the bottom of the color palette */
+.settings-group-appearance {
+  margin-bottom: 14px;
 }
 
 .settings-group-title {
@@ -1067,13 +1085,24 @@ input:checked+.toggle-slider:before {
   background: var(--bg-tertiary);
 }
 
-/* === Settings GitHub footer === */
-.settings-github-footer {
-  padding: 6px 0 4px;
-  text-align: center;
+/* === Settings footer links === */
+.settings-footer-links {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-top: auto;
+  padding: 32px 0 16px;
 }
 
-.settings-github-link {
+.settings-footer-divider {
+  width: 1px;
+  height: 12px;
+  background: var(--border-medium);
+  flex: 0 0 auto;
+}
+
+.settings-footer-link {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1083,7 +1112,7 @@ input:checked+.toggle-slider:before {
   transition: color 0.2s ease;
 }
 
-.settings-github-link:hover {
+.settings-footer-link:hover {
   color: var(--text-primary);
   text-decoration: underline;
 }
@@ -3063,6 +3092,7 @@ body:not(.dark-mode) .mobile-tab-bar {
 
   #settingsModal .modal-content {
     padding: 16px;
+    padding-bottom: 0;
     flex: 1;
     overflow-y: auto;
     max-height: none;

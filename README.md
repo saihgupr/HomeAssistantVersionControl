@@ -1,4 +1,4 @@
-# Home Assistant Version Control
+# <sup><img src="https://github.com/saihgupr/HomeAssistantVersionControl/raw/develop/images/icon-96.png" width="48" height="48" align="middle" alt="Home Assistant Version Control" /></sup> Home Assistant Version Control
 
 **Automatic backup, history tracking, and instant restore for your Home Assistant configuration.**
 

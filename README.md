@@ -9,7 +9,7 @@ Home Assistant Version Control provides complete version history for your setup.
 [Home Assistant Tweaks](https://github.com/saihgupr/HomeAssistantTweaks) recently added version history to the native automation and script editors. Install it alongside this app and a version control button appears in the editor toolbar: step back through earlier saves of the automation or script you are editing, preview any version in the editor, and restore it with a normal save. The button only appears when this app is installed and reachable, and the rest of the tweaks work on their own.
 
 <p align="center">
-  <img src="https://github.com/saihgupr/HomeAssistantVersionControl/raw/develop/images/screenshots/version-control-button.png" width="720" alt="Version history navigation in the Home Assistant automation editor" />
+  <img src="https://github.com/saihgupr/HomeAssistantVersionControl/raw/develop/images/screenshots/ha-tweaks-version-history.png" width="960" alt="Version history navigation in the Home Assistant automation editor" />
 </p>
 
 ## What's New in v1.6!

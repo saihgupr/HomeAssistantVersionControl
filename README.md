@@ -88,7 +88,7 @@ Run [Home Assistant Tweaks](https://github.com/saihgupr/HomeAssistantTweaks#reco
 
 <p align="center">
   <a href="https://github.com/saihgupr/HomeAssistantTweaks#recover-earlier-versions-of-automations-and-scripts" target="_blank" rel="noopener">
-    <img src="https://github.com/saihgupr/HomeAssistantVersionControl/raw/develop/images/screenshots/ha-tweaks-version-history.gif" width="720" alt="Version history control in the automation editor" />
+    <img src="https://github.com/saihgupr/HomeAssistantVersionControl/raw/develop/images/screenshots/ha-tweaks-version-history.gif" width="960" alt="Version history control in the automation editor" />
   </a>
 </p>
 

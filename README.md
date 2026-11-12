@@ -2,7 +2,7 @@
 
 **Automatic backup, history tracking, and instant restore for your Home Assistant configuration.**
 
-[![Docker pulls](https://img.shields.io/badge/Docker_pulls-58.4K-blue?style=flat-square&logo=docker)](https://github.com/saihgupr/HomeAssistantVersionControl/pkgs/container/home-assistant-version-control) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](https://github.com/saihgupr/HomeAssistantVersionControl/blob/main/LICENSE)
+[![Release](https://img.shields.io/github/v/release/saihgupr/HomeAssistantVersionControl?style=flat-square&label=release)](https://github.com/saihgupr/HomeAssistantVersionControl/releases) [![Docker pulls](https://img.shields.io/badge/Docker_pulls-58.4K-blue?style=flat-square&logo=docker)](https://github.com/saihgupr/HomeAssistantVersionControl/pkgs/container/home-assistant-version-control) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](https://github.com/saihgupr/HomeAssistantVersionControl/blob/main/LICENSE)
 
 Home Assistant Version Control provides complete version history for your setup. It automatically tracks every change to your YAML configuration files using a robust local Git backend. Browse your history, visualize diffs, and restore individual files or your entire configuration to any previous state with a single click.
 

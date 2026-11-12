@@ -165,6 +165,8 @@
     "manual_mode": "Manual Mode Only",
     "auto_save": "Auto Save",
     "auto_save_desc": "Delay before auto-saving",
+    "auto_reload": "Auto-reload Home Assistant",
+    "auto_reload_desc": "Reload changed components after each automatic backup",
     "picasso_enabled": "Picasso Mode enabled!",
     "picasso_disabled": "Picasso Mode disabled",
     "colors_reset": "Colors reset to default",

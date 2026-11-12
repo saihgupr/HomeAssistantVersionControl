@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Auto-reload Changed Components:** Optional setting that reloads the matching Home Assistant domain after each automatic backup. Covers automations, scripts, scenes, groups, inputs, timers, counters, template entities, command_line, HomeKit, and customize. Off by default; requires the Home Assistant API (add-on mode or `HA_URL` plus a token in Docker).
+- **Home Assistant Tweaks Integration:** Pair with [Home Assistant Tweaks](https://github.com/saihgupr/HomeAssistantTweaks) to browse and restore versions from the native automation and script editors.
+
 ## [1.5.2]
 
 ### Fixed & Improved

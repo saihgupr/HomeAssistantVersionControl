@@ -302,6 +302,97 @@ async function callHomeAssistantService(domain, service, serviceData = {}) {
   }
 }
 
+// Map standard Home Assistant config files to the services that reload them.
+// Keys are lowercase basenames so nested paths still match.
+const RELOAD_SERVICE_MAP = {
+  'automations.yaml': [['automation', 'reload']],
+  'automations.yml': [['automation', 'reload']],
+  'scripts.yaml': [['script', 'reload']],
+  'scripts.yml': [['script', 'reload']],
+  'scenes.yaml': [['scene', 'reload']],
+  'scenes.yml': [['scene', 'reload']],
+  'groups.yaml': [['group', 'reload']],
+  'groups.yml': [['group', 'reload']],
+  'input_boolean.yaml': [['input_boolean', 'reload']],
+  'input_boolean.yml': [['input_boolean', 'reload']],
+  'input_number.yaml': [['input_number', 'reload']],
+  'input_number.yml': [['input_number', 'reload']],
+  'input_select.yaml': [['input_select', 'reload']],
+  'input_select.yml': [['input_select', 'reload']],
+  'input_text.yaml': [['input_text', 'reload']],
+  'input_text.yml': [['input_text', 'reload']],
+  'input_datetime.yaml': [['input_datetime', 'reload']],
+  'input_datetime.yml': [['input_datetime', 'reload']],
+  'timer.yaml': [['timer', 'reload']],
+  'timer.yml': [['timer', 'reload']],
+  'counter.yaml': [['counter', 'reload']],
+  'counter.yml': [['counter', 'reload']],
+  'switches.yaml': [['template', 'reload']],
+  'switches.yml': [['template', 'reload']],
+  'sensors.yaml': [['template', 'reload']],
+  'sensors.yml': [['template', 'reload']],
+  'binary_sensors.yaml': [['template', 'reload']],
+  'binary_sensors.yml': [['template', 'reload']],
+  'lights.yaml': [['template', 'reload'], ['group', 'reload']],
+  'lights.yml': [['template', 'reload'], ['group', 'reload']],
+  'command_line.yaml': [['command_line', 'reload']],
+  'command_line.yml': [['command_line', 'reload']],
+  'homekit.yaml': [['homekit', 'reload']],
+  'homekit.yml': [['homekit', 'reload']],
+  'customize.yaml': [['homeassistant', 'reload_core_config']],
+  'customize.yml': [['homeassistant', 'reload_core_config']]
+};
+
+function getReloadServicesForFiles(files) {
+  const services = new Map();
+  for (const file of files) {
+    const name = path.basename(String(file)).toLowerCase();
+    const targets = RELOAD_SERVICE_MAP[name];
+    if (!targets) continue;
+    for (const [domain, service] of targets) {
+      services.set(`${domain}.${service}`, { domain, service });
+    }
+  }
+  return [...services.values()];
+}
+
+let autoReloadUnavailableLogged = false;
+let suppressAutoReloadUntil = 0;
+
+/**
+ * Reload the Home Assistant domains touched by a commit. Failures are logged
+ * but never bubble up, so a reload problem cannot break the commit or sync.
+ */
+async function reloadHomeAssistantForFiles(files) {
+  if (!runtimeSettings.autoReload) return;
+  if (Date.now() < suppressAutoReloadUntil) {
+    console.log('[auto-reload] Skipping reload, restore already reloaded Home Assistant');
+    return;
+  }
+
+  const services = getReloadServicesForFiles(files);
+  if (services.length === 0) return;
+
+  console.log(`[auto-reload] Reloading ${services.map(s => `${s.domain}.${s.service}`).join(', ')}`);
+  for (const { domain, service } of services) {
+    const result = await callHomeAssistantService(domain, service);
+    if (!result.success) {
+      console.log(`[auto-reload] ${domain}.${service} failed: ${result.error}`);
+      if (result.error === 'SUPERVISOR_TOKEN not available') {
+        if (!autoReloadUnavailableLogged) {
+          autoReloadUnavailableLogged = true;
+          console.log('[auto-reload] Home Assistant API is not configured, skipping further reloads');
+        }
+        break;
+      }
+    }
+  }
+}
+
+function suppressAutoReload(ms = 15000) {
+  suppressAutoReloadUntil = Date.now() + ms;
+}
+
 // Restart Home Assistant endpoint
 app.post('/api/ha/restart', async (req, res) => {
   try {
@@ -400,6 +491,7 @@ let runtimeSettings = {
   },
   additionalPaths: [],
   manualMode: false,
+  autoReload: false,
   legacyArrowDirection: false,
   watcherUsePolling: true,
   watcherInterval: 2000
@@ -458,6 +550,10 @@ const RUNTIME_SETTINGS_SCHEMA = {
   manualMode: {
     type: 'boolean',
     envKey: 'MANUAL_MODE'
+  },
+  autoReload: {
+    type: 'boolean',
+    envKey: 'AUTO_RELOAD'
   },
   includeExtensions: {
     type: 'list',
@@ -1553,6 +1649,10 @@ async function initRepo() {
         runtimeSettings.manualMode = !!config.manual_mode;
         console.log(`[init] Manual mode from config: ${runtimeSettings.manualMode}`);
       }
+      if (config.auto_reload !== undefined) {
+        runtimeSettings.autoReload = !!config.auto_reload;
+        console.log(`[init] Auto-reload from config: ${runtimeSettings.autoReload}`);
+      }
       if (config.legacy_arrow_direction !== undefined) {
         runtimeSettings.legacyArrowDirection = !!config.legacy_arrow_direction;
         console.log(`[init] Legacy arrow direction from config: ${runtimeSettings.legacyArrowDirection}`);
@@ -1883,6 +1983,10 @@ app.post('/api/runtime-settings', async (req, res) => {
       if (gitInitialized) {
         await applyWatcherMode();
       }
+    }
+
+    if (newSettings.autoReload !== undefined) {
+      runtimeSettings.autoReload = !!newSettings.autoReload;
     }
 
     if (newSettings.legacyArrowDirection !== undefined) {
@@ -2557,6 +2661,9 @@ app.post('/api/restore-file', async (req, res) => {
 
     let message = 'File restored (auto-commit pending)';
 
+    // The watcher will also see the restored file, so skip its auto-reload
+    suppressAutoReload();
+
     // Check if we need to reload Home Assistant components
     if (filePath.endsWith('automations.yaml')) {
       console.log('[restore] Reloading automations in Home Assistant...');
@@ -2659,6 +2766,9 @@ app.post('/api/restore-commit', async (req, res) => {
 
     console.log(`[restore] All files restored (${files.length} files)`);
     console.log(`[restore] File watcher will auto-commit these changes`);
+
+    // The watcher will also see the restored files, so skip its auto-reload
+    suppressAutoReload();
 
     // Check if we need to reload automations or scripts in Home Assistant
     const needsAutomationReload = files.some(f => f.toLowerCase().includes('automations.yaml') || f.toLowerCase().includes('automations.yml'));
@@ -3184,6 +3294,9 @@ function initializeWatcher() {
         console.log(`[watcher] Committing: ${commitMessage} (${stagedFiles.length} file(s))`);
         await gitCommit(commitMessage);
         console.log(`Committed: ${commitMessage}`);
+
+        // Reload changed Home Assistant components if enabled
+        await reloadHomeAssistantForFiles(stagedFiles);
 
         // Run retention cleanup if enabled
         if (runtimeSettings.historyRetention) {
@@ -4312,6 +4425,8 @@ app.post('/api/automation/:id/restore', async (req, res) => {
     const success = await restoreAutomation(id, commitHash, CONFIG_PATH);
 
     if (success) {
+      // The watcher will also see the restored file, so skip its auto-reload
+      suppressAutoReload();
       // Automatically reload automations in Home Assistant
       console.log('[restore automation] Reloading automations in Home Assistant...');
       const reloadResult = await callHomeAssistantService('automation', 'reload');
@@ -4338,6 +4453,8 @@ app.post('/api/script/:id/restore', async (req, res) => {
     const success = await restoreScript(id, commitHash, CONFIG_PATH);
 
     if (success) {
+      // The watcher will also see the restored file, so skip its auto-reload
+      suppressAutoReload();
       // Automatically reload scripts in Home Assistant
       console.log('[restore script] Reloading scripts in Home Assistant...');
       const reloadResult = await callHomeAssistantService('script', 'reload');

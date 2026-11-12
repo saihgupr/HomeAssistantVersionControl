@@ -14,9 +14,10 @@ Home Assistant Version Control provides complete version history for your setup.
 
 ## What's New in v1.6!
 
-v1.6 focuses on cloud sync.
+v1.6 focuses on cloud sync and hands-free reloads.
 
 *   **Mirror Remote for Cloud Sync:** Add a second Git remote and every sync pushes to both. Use it for a redundant off-site copy, drift detection, or an audit repository. Mirror pushes are non-fatal, so a failure never blocks your primary backup.
+*   **Auto-reload Changed Components:** Optionally reload the Home Assistant domain that changed after each automatic backup. Edit automations, scripts, scenes, inputs, or templates and the matching reload service runs without a Developer Tools trip. Off by default.
 *   **Cleaner Cloud Sync Fields:** Token inputs no longer show the browser's password and autofill icons.
 
 ### Also in This Release
@@ -57,6 +58,7 @@ v1.6 focuses on cloud sync.
 ###  Automatic & Smart Tracking
 * **Zero-Effort Backups:** Every edit is saved automatically.
 * **Smart Debouncing:** Multiple rapid edits are grouped into a single save snapshot (customizable delay).
+* **Hands-Free Reloads:** Optionally reload changed Home Assistant components after each backup, so edits apply without opening Developer Tools.
 * **Comprehensive Tracking:** Monitors `.yaml`, `.yml`, and `lovelace` dashboard files.
 * **Custom Extensions:** Track any file format (e.g., `.sh`, `.py`, `.json`, `.conf`) by adding it to the configuration.
 * **Manual Mode:** Option to disable file watching and only trigger backups manually via the "Backup Now" button.
@@ -187,6 +189,18 @@ docker run -d \
 
 Access the interface at `http://localhost:54001`.
 
+### Docker Data & Settings
+
+Web UI settings are stored in `/data/runtime-settings.json`. Mount `/data` as a volume so they survive container recreation:
+
+```yaml
+volumes:
+  - /path/to/your/config:/config
+  - /path/to/havc-data:/data
+```
+
+Without a persistent `/data` volume, set the same options with environment variables. The settings file takes precedence over environment variables, and environment variables take precedence over defaults. To edit `runtime-settings.json` by hand, stop the container first, keep the JSON valid, and restart to apply. See [Runtime Settings](#runtime-settings) for the full list.
+
 ## Configuration
 
 ### App Options
@@ -275,6 +289,7 @@ The application can be configured through the web UI Settings page or via enviro
 | Setting | Description | Default |
 | :--- | :--- | :--- |
 | **Debounce Time** | Time to wait after detecting changes before creating a commit | `5 seconds` |
+| **Auto-reload Home Assistant** | Reload changed components after each automatic backup | `Disabled` |
 | **History Retention** | Automatically merge old commits to keep history clean | `Disabled` |
 | **Retention Type** | Keep history based on time or number of versions | `time` |
 | **Retention Value** | How much history to keep (number of days/hours/weeks/months or versions) | `90` |
@@ -299,6 +314,7 @@ For containerized deployments (especially when not persisting the `/data` direct
 | :--- | :--- | :--- | :--- | :--- |
 | `DEBOUNCE_TIME` | Debounce Time | Number | ≥ 0 | `5` |
 | `DEBOUNCE_TIME_UNIT` | Debounce Time Unit | String | `seconds`, `minutes`, `hours`, `days` | `seconds` |
+| `AUTO_RELOAD` | Auto-reload Home Assistant | Boolean | `true`, `false`, `yes`, `no`, `1`, `0` | `false` |
 | `HISTORY_RETENTION` | History Retention | Boolean | `true`, `false`, `yes`, `no`, `1`, `0` | `false` |
 | `RETENTION_TYPE` | Retention Type | String | `time`, `versions` | `time` |
 | `RETENTION_VALUE` | Retention Value | Number | ≥ 1 | `90` |
@@ -388,7 +404,10 @@ Invalid values will trigger warnings:
 2.  **Stabilization:** When a change is detected, it waits **2 seconds** to ensure Home Assistant has finished writing the file (preventing corruption).
 3.  **Debounce:** It then waits for your configured **Debounce Time** (default 5s) to batch related edits into a single commit.
 4.  **Snapshot:** A Git commit is created with a timestamp.
-5.  **Cleanup:** If enabled, old snapshots are consolidated periodically.
+5.  **Reload:** If enabled, changed Home Assistant components are reloaded automatically.
+6.  **Cleanup:** If enabled, old snapshots are consolidated periodically.
+
+Auto-reload maps standard filenames to their reload service. Automations, scripts, scenes, groups, inputs, timers, counters, template sensors and switches, command_line, HomeKit, and `customize.yaml` are covered. Files pulled in through custom `!include` names are not mapped.
 
 ### What is Tracked?
 The app automatically tracks configuration files while ignoring system files.

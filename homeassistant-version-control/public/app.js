@@ -242,6 +242,13 @@ async function loadSettings() {
         document.getElementById('autoSave').checked = !manualMode;
         localStorage.setItem('manualMode', manualMode);
 
+        // Auto-reload Home Assistant
+        const autoReloadToggle = document.getElementById('autoReload');
+        if (autoReloadToggle) {
+          autoReloadToggle.checked = settings.autoReload === true;
+        }
+        localStorage.setItem('autoReload', settings.autoReload === true);
+
         // Legacy Arrow Direction
         if (settings.legacyArrowDirection !== undefined) {
           reverseArrowDirection = settings.legacyArrowDirection === true;
@@ -1391,6 +1398,7 @@ async function saveSettings(closeOnSave = true) {
   const limitHistoryEl = document.getElementById('limitHistory');
   const maxCommitsEl = document.getElementById('maxCommits');
   const autoSaveEl = document.getElementById('autoSave');
+  const autoReloadEl = document.getElementById('autoReload');
 
   const debounceTime = debounceTimeEl ? debounceTimeEl.value : '3';
   const debounceTimeUnit = debounceTimeUnitEl ? debounceTimeUnitEl.value : 'seconds';
@@ -1401,6 +1409,7 @@ async function saveSettings(closeOnSave = true) {
   const limitHistory = limitHistoryEl ? limitHistoryEl.checked : false;
   const maxCommits = maxCommitsEl ? parseInt(maxCommitsEl.value) : 50;
   const manualMode = autoSaveEl ? !autoSaveEl.checked : false;
+  const autoReload = autoReloadEl ? autoReloadEl.checked : false;
 
   const diffViewSplit = document.getElementById('diffViewSplit') ? document.getElementById('diffViewSplit').checked : false;
   const newDiffViewFormat = diffViewSplit ? 'split' : 'unified';
@@ -1418,6 +1427,7 @@ async function saveSettings(closeOnSave = true) {
   localStorage.setItem('limitHistory', limitHistory);
   localStorage.setItem('maxCommits', maxCommits);
   localStorage.setItem('manualMode', manualMode);
+  localStorage.setItem('autoReload', autoReload);
   localStorage.setItem('diffViewFormat', newDiffViewFormat);
   localStorage.setItem('diffStyle', newDiffStyle);
 
@@ -1447,6 +1457,7 @@ async function saveSettings(closeOnSave = true) {
         limitHistory,
         maxCommits,
         manualMode,
+        autoReload,
         extensions: currentExtensions,
         legacyArrowDirection: reverseArrowDirection
       })

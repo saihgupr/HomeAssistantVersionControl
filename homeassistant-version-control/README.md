@@ -147,6 +147,9 @@ There are two ways to install Home Assistant Version Control: as a Home Assistan
 
 ### 2. Standalone Docker Installation
 
+> [!WARNING]
+> The standalone container has no authentication on its API. Anything that can reach port `54001` can read your Home Assistant configuration and trigger restores. Keep the port on a local or trusted network, never expose it to the internet, and put an authenticating reverse proxy in front of it if you need remote access.
+
 For Docker users who aren't using the Home Assistant app, you have three deployment options:
 
 **Option A: Docker Compose (recommended):**

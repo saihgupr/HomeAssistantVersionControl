@@ -26,6 +26,15 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import yaml from 'js-yaml';
 import { execSync } from 'child_process';
+import crypto from 'crypto';
+import {
+  resolveInside,
+  toRepoRelative,
+  isInside,
+  realPathInside,
+  isCommitish,
+  assertCommitish
+} from './utils/path-safety.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,12 +75,32 @@ console.error = function (...args) {
 
 
 
+/**
+ * The Home Assistant base image runs the app through s6, which does not always
+ * export the container environment to the child process. The same values are
+ * available as files under /run/s6/container_environment, so check there too.
+ *
+ * @param {string} name
+ * @returns {string|undefined}
+ */
+function readRuntimeEnv(name) {
+  if (process.env[name] !== undefined) return process.env[name];
+  try {
+    return fs.readFileSync(`/run/s6/container_environment/${name}`, 'utf8').trim();
+  } catch (error) {
+    return undefined;
+  }
+}
+
 const app = express();
-const PORT = process.env.PORT || 54001;
-const HOST = process.env.HOST || '::';
+const DATA_DIR = readRuntimeEnv('DATA_PATH') || '/data';
+const isAddonMode = fs.existsSync(path.join(DATA_DIR, 'options.json'));
+const PORT = readRuntimeEnv('PORT') || 54001;
+// Add-on/Ingress needs to listen on all interfaces. A bare-metal run only needs
+// loopback, and Docker users can set HOST or the Dockerfile default explicitly.
+const HOST = readRuntimeEnv('HOST') || (isAddonMode ? '0.0.0.0' : '127.0.0.1');
 const EXTERNAL_MIRROR_DIR = '.havc_external';
 const ALLOWED_ADDITIONAL_PATH_PREFIXES = ['/share', '/media', '/ssl', '/config', '/addon_configs'];
-const DATA_DIR = process.env.DATA_PATH || '/data';
 
 /**
  * Mask embedded credentials in URLs for safe logging
@@ -82,6 +111,126 @@ function maskUrl(url) {
   if (!url || typeof url !== 'string') return '';
   return url.replace(/:\/\/([^/]+)@/, '://***@');
 }
+
+// ---------------------------------------------------------------------------
+// API authentication
+//
+// Standalone Docker installs are reachable on the network, so basic auth is on
+// by default there. Inside a Home Assistant add-on the Supervisor/Ingress layer
+// already authenticates users, so it defaults to off. HAVC_API_AUTH always wins.
+// ---------------------------------------------------------------------------
+let addonOptions = {};
+if (isAddonMode) {
+  try {
+    addonOptions = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'options.json'), 'utf-8')) || {};
+  } catch (error) {
+    console.error('[auth] Could not read options.json:', error.message);
+    addonOptions = {};
+  }
+}
+
+function parseBooleanFlag(value) {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  if (['off', 'false', '0', 'no'].includes(normalized)) return false;
+  if (['on', 'true', '1', 'yes'].includes(normalized)) return true;
+  return null;
+}
+
+const apiAuthEnvOverride = parseBooleanFlag(readRuntimeEnv('HAVC_API_AUTH') || '');
+let apiAuthEnabled = apiAuthEnvOverride === null ? !isAddonMode : apiAuthEnvOverride;
+if (addonOptions.api_auth === true || addonOptions.api_auth === 'true') {
+  apiAuthEnabled = true;
+}
+
+const apiUsername = readRuntimeEnv('HAVC_USERNAME') || 'havc';
+const API_PASSWORD_FILE = path.join(DATA_DIR, 'api-password');
+let apiPassword = null;
+
+function resolveApiPassword() {
+  const envPassword = readRuntimeEnv('HAVC_PASSWORD');
+  if (envPassword) return envPassword;
+
+  if (typeof addonOptions.api_auth_password === 'string' && addonOptions.api_auth_password !== '') {
+    return addonOptions.api_auth_password;
+  }
+
+  try {
+    const stored = fs.readFileSync(API_PASSWORD_FILE, 'utf-8').trim();
+    if (stored) return stored;
+  } catch (error) {
+    // No password file yet; generate one below.
+  }
+
+  const generated = crypto.randomBytes(18).toString('base64url');
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(API_PASSWORD_FILE, `${generated}\n`, { mode: 0o600 });
+    fs.chmodSync(API_PASSWORD_FILE, 0o600);
+  } catch (error) {
+    console.error('[auth] Could not persist generated API password:', error.message);
+  }
+  return generated;
+}
+
+if (apiAuthEnabled) {
+  const passwordIsConfigured = !!(readRuntimeEnv('HAVC_PASSWORD') ||
+    (typeof addonOptions.api_auth_password === 'string' && addonOptions.api_auth_password !== ''));
+  apiPassword = resolveApiPassword();
+  console.log(`[auth] API basic auth enabled (user: ${apiUsername})`);
+  if (passwordIsConfigured) {
+    console.log('[auth] Using the configured API password');
+  } else {
+    console.log(`[auth] API password: ${apiPassword}`);
+  }
+}
+
+function constantTimeEqual(left, right) {
+  const leftHash = crypto.createHash('sha256').update(String(left ?? ''), 'utf8').digest();
+  const rightHash = crypto.createHash('sha256').update(String(right ?? ''), 'utf8').digest();
+  return crypto.timingSafeEqual(leftHash, rightHash);
+}
+
+function basicAuth(req, res, next) {
+  if (!apiAuthEnabled) return next();
+
+  // CORS preflights never carry credentials.
+  if (req.method === 'OPTIONS') return res.status(204).end();
+
+  const header = req.headers.authorization || '';
+  const separatorIndex = header.indexOf(' ');
+  const scheme = separatorIndex === -1 ? '' : header.slice(0, separatorIndex);
+  const encoded = separatorIndex === -1 ? '' : header.slice(separatorIndex + 1).trim();
+
+  if (scheme.toLowerCase() === 'basic' && encoded) {
+    let decoded = '';
+    try {
+      decoded = Buffer.from(encoded, 'base64').toString('utf8');
+    } catch (error) {
+      decoded = '';
+    }
+
+    // Only the first colon separates user from password (passwords may contain colons).
+    const colonIndex = decoded.indexOf(':');
+    if (colonIndex !== -1) {
+      const username = decoded.slice(0, colonIndex);
+      const password = decoded.slice(colonIndex + 1);
+      if (constantTimeEqual(username, apiUsername) && constantTimeEqual(password, apiPassword)) {
+        return next();
+      }
+    }
+  }
+
+  res.set('WWW-Authenticate', 'Basic realm="Home Assistant Version Control", charset="UTF-8"');
+  return res.status(401).json({ success: false, error: 'Authentication required' });
+}
+
+// Exact-match allowlist. Substring matching let any origin containing
+// "localhost" (for example http://localhost.attacker.example) through.
+const allowedOrigins = (readRuntimeEnv('HAVC_ALLOWED_ORIGINS') || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(origin => origin.length > 0);
 
 // Ensure HOME is set for git & SSH compatibility
 if (!process.env.HOME) {
@@ -125,30 +274,37 @@ function configureGitIdentity() {
 
 app.use(express.json());
 
-// CORS middleware for Home Assistant Ingress
+// CORS middleware for explicitly allowed cross-origin clients.
+// The SPA is served same-origin, so no CORS headers are needed for normal use.
 app.use((req, res, next) => {
-  // Get the origin from the request
   const origin = req.headers.origin;
+  const originAllowed = !!origin && allowedOrigins.includes(origin);
 
-  // Allow any localhost variation
-  if (origin && (origin.includes('localhost') ||
-    origin.includes('127.0.0.1') ||
-    origin.includes('192.168.') ||
-    origin.includes('10.') ||
-    origin.includes('172.'))) {
+  if (originAllowed) {
     res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary', 'Origin');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+      return res.status(204).end();
+    }
   }
 
-  // Allow credentials
-  res.header('Access-Control-Allow-Credentials', 'true');
+  next();
+});
 
-  // Allowed methods and headers
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+// CSRF guard. Browsers send Sec-Fetch-Site on every request, so a cross-site
+// mutation is always a forged one. Requests without the header (older clients)
+// are left alone: Home Assistant Ingress can rewrite Host, which makes an
+// Origin/Host comparison unreliable.
+app.use((req, res, next) => {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
 
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+  if (req.headers['sec-fetch-site'] === 'cross-site') {
+    return res.status(403).json({ success: false, error: 'Cross-site request blocked' });
   }
 
   next();
@@ -174,6 +330,11 @@ app.use((req, res, next) => {
 
   next();
 });
+
+// API authentication runs after the ingress rewrite above so req.url is
+// already stripped of the /api prefix path prefix. It only guards /api:*,
+// leaving the SPA, static assets and the root healthcheck reachable.
+app.use('/api', basicAuth);
 
 // Static files - serve public directory at root
 // Add cache control headers for JSON files to prevent stale translations
@@ -448,6 +609,8 @@ let additionalTrackedPaths = [];
 const debounceTimers = new Map();
 let watcher = null;
 const externalWatchers = [];
+const INIT_RETRY_DELAY_MS = 15000;
+let lastInitAttemptAt = 0;
 let configOptions = {
   yaml_format: true,
   json_format: false,
@@ -499,7 +662,7 @@ let runtimeSettings = {
   manualMode: false,
   autoReload: false,
   legacyArrowDirection: false,
-  watcherUsePolling: true,
+  watcherUsePolling: false,
   watcherInterval: 2000
 };
 
@@ -1585,13 +1748,48 @@ async function setupCaCertificates() {
   }
 }
 
-async function initRepo() {
+/**
+ * Remove a Git lock left behind by a crashed or killed process. A stale index.lock makes
+ * every git command fail forever, which turns the watcher into an endless init retry loop.
+ */
+async function clearStaleGitLock(repoPath, maxAgeMs = 10 * 60 * 1000) {
+  const lockPath = path.join(repoPath, '.git', 'index.lock');
+  try {
+    const stats = await fsPromises.stat(lockPath);
+    if (Date.now() - stats.mtimeMs < maxAgeMs) {
+      return;
+    }
+    await fsPromises.unlink(lockPath);
+    console.log(`[init] Removed stale Git lock (${Math.round((Date.now() - stats.mtimeMs) / 1000)}s old): ${lockPath}`);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.error('[init] Could not check Git lock:', error.message);
+    }
+  }
+}
+
+let initRepoPromise = null;
+
+/**
+ * Serialize initialization. Startup and watcher retries can overlap; letting them run
+ * concurrently makes them fight over .git/index.lock and burn CPU.
+ */
+function initRepo() {
+  if (!initRepoPromise) {
+    initRepoPromise = initRepoInternal().finally(() => {
+      initRepoPromise = null;
+    });
+  }
+  return initRepoPromise;
+}
+
+async function initRepoInternal() {
   // Load runtime settings first
   await loadRuntimeSettings();
 
   try {
     // Determine CONFIG_PATH
-    CONFIG_PATH = process.env.CONFIG_PATH;
+    CONFIG_PATH = readRuntimeEnv('CONFIG_PATH');
 
     // Also check for config.json in the data directory
     try {
@@ -1762,6 +1960,7 @@ async function initRepo() {
       console.log(`[external-sync] Startup sync complete: paths=${externalSyncStats.paths}, copied=${externalSyncStats.copied}, removed=${externalSyncStats.removed}`);
     }
 
+    await clearStaleGitLock(CONFIG_PATH);
     const isRepo = await gitCheckIsRepo();
 
     // Check for nested git repositories to ignore
@@ -1983,7 +2182,9 @@ app.get('/api/app-settings', async (req, res) => {
     haAuthConfigured: false,
     liveConfigPath: CONFIG_PATH,
     backupFolderPath: null,
-    haCredentialsSource: 'none'
+    haCredentialsSource: 'none',
+    apiAuthEnabled,
+    apiAuthMode: apiAuthEnabled ? 'basic' : 'none'
   });
 });
 
@@ -2555,7 +2756,10 @@ app.get('/api/git/history', async (req, res) => {
 app.get('/api/git/commit-details', async (req, res) => {
   try {
     const { commitHash } = req.query;
-    const status = await gitCommitDetails(commitHash);
+    if (!isCommitish(commitHash)) {
+      return res.status(400).json({ success: false, error: 'Invalid commit hash' });
+    }
+    const status = await gitCommitDetails(commitHash.trim());
     res.json({ success: true, status });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -2596,7 +2800,20 @@ app.post('/api/git/add-all-and-commit', async (req, res) => {
 app.get('/api/git/file-at-commit', async (req, res) => {
   try {
     const { commitHash, filePath } = req.query;
-    const content = await gitShowFileAtCommit(commitHash, filePath);
+
+    let safeCommitHash;
+    try {
+      safeCommitHash = assertCommitish(commitHash);
+    } catch (error) {
+      return res.status(400).json({ success: false, error: 'Invalid commit hash' });
+    }
+
+    const safeFilePath = toRepoRelative(CONFIG_PATH, filePath);
+    if (!safeFilePath) {
+      return res.status(400).json({ success: false, error: 'Invalid file path' });
+    }
+
+    const content = await gitShowFileAtCommit(safeCommitHash, safeFilePath);
     res.json({ success: true, content });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -2608,12 +2825,25 @@ app.get('/api/file-content', async (req, res) => {
   try {
     const { filePath } = req.query;
 
-    let fullPath = path.join(CONFIG_PATH, filePath);
-    if (isMirroredExternalRepoPath(filePath)) {
-      const externalPath = repoPathToExternalAbsolute(filePath);
-      if (externalPath && isPathInConfiguredAdditionalPaths(externalPath)) {
-        fullPath = externalPath;
+    const normalizedPath = toRepoRelative(CONFIG_PATH, filePath);
+    if (!normalizedPath) {
+      return res.status(400).json({ success: false, error: 'Invalid file path' });
+    }
+
+    let fullPath = path.join(CONFIG_PATH, normalizedPath);
+    let allowedRoot = CONFIG_PATH;
+
+    if (isMirroredExternalRepoPath(normalizedPath)) {
+      const externalPath = repoPathToExternalAbsolute(normalizedPath);
+      if (!externalPath || !isPathInConfiguredAdditionalPaths(externalPath)) {
+        return res.status(400).json({ success: false, error: 'Invalid mirrored file path' });
       }
+      fullPath = externalPath;
+      allowedRoot = additionalTrackedPaths.find(basePath => isPathUnder(basePath, externalPath)) || null;
+    }
+
+    if (!allowedRoot || !isInside(allowedRoot, fullPath) || !(await realPathInside(allowedRoot, fullPath))) {
+      return res.status(400).json({ success: false, error: 'File path is outside the allowed directory' });
     }
 
     const content = await fsPromises.readFile(fullPath, 'utf-8');
@@ -2627,7 +2857,13 @@ app.get('/api/file-content', async (req, res) => {
 app.get('/api/git/file-history', async (req, res) => {
   try {
     const { filePath } = req.query;
-    const logOptions = { file: filePath };
+
+    const safeFilePath = toRepoRelative(CONFIG_PATH, filePath);
+    if (!safeFilePath) {
+      return res.status(400).json({ success: false, error: 'Invalid file path' });
+    }
+
+    const logOptions = { file: safeFilePath };
     if (runtimeSettings.limitHistory) {
       logOptions.maxCount = runtimeSettings.maxCommits;
     }
@@ -2637,7 +2873,7 @@ app.get('/api/git/file-history', async (req, res) => {
     let currentHash = '';
     try {
       // Use git hash-object to get the hash of the file on disk
-      currentHash = (await gitRaw(['hash-object', filePath])).trim();
+      currentHash = (await gitRaw(['hash-object', '--', safeFilePath])).trim();
     } catch (e) {
       // File might not exist or other error
     }
@@ -2647,7 +2883,7 @@ app.get('/api/git/file-history', async (req, res) => {
       try {
         // git ls-tree <commit> <path>
         // Output format: <mode> blob <hash>\t<path>
-        const treeOut = await gitRaw(['ls-tree', commit.hash, filePath]);
+        const treeOut = await gitRaw(['ls-tree', commit.hash, '--', safeFilePath]);
         const match = treeOut.match(/blob\s+([0-9a-f]+)/);
         const blobHash = match ? match[1] : null;
         return { ...commit, blobHash };
@@ -2669,7 +2905,17 @@ app.get('/api/git/file-history', async (req, res) => {
 app.get('/api/git/file-diff', async (req, res) => {
   try {
     const { filePath, commitHash } = req.query;
-    const diff = await gitDiff([`${commitHash}^`, commitHash, '--', filePath]);
+    if (!isCommitish(commitHash)) {
+      return res.status(400).json({ success: false, error: 'Invalid commit hash' });
+    }
+
+    const safeFilePath = toRepoRelative(CONFIG_PATH, filePath);
+    if (!safeFilePath) {
+      return res.status(400).json({ success: false, error: 'Invalid file path' });
+    }
+
+    const safeCommitHash = commitHash.trim();
+    const diff = await gitDiff([`${safeCommitHash}^`, safeCommitHash, '--', safeFilePath]);
     res.json({ success: true, diff });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -2683,7 +2929,11 @@ app.get('/api/git/commit-diff', async (req, res) => {
     if (!commitHash) {
       return res.status(400).json({ success: false, error: 'commitHash is required' });
     }
-    const diff = await gitDiff([`${commitHash}^`, commitHash]);
+    if (!isCommitish(commitHash)) {
+      return res.status(400).json({ success: false, error: 'Invalid commit hash' });
+    }
+    const safeCommitHash = commitHash.trim();
+    const diff = await gitDiff([`${safeCommitHash}^`, safeCommitHash]);
     res.json({ success: true, diff });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -2694,16 +2944,27 @@ app.get('/api/git/commit-diff', async (req, res) => {
 app.post('/api/restore-file', async (req, res) => {
   try {
     const { commitHash, filePath } = req.body;
-    console.log(`[restore] Restoring file ${filePath} to commit ${commitHash.substring(0, 8)}`);
+
+    if (!isCommitish(commitHash)) {
+      return res.status(400).json({ success: false, error: 'Invalid commit hash' });
+    }
+    const safeCommitHash = commitHash.trim();
+
+    const safeFilePath = toRepoRelative(CONFIG_PATH, filePath);
+    if (!safeFilePath) {
+      return res.status(400).json({ success: false, error: 'Invalid file path' });
+    }
+
+    console.log(`[restore] Restoring file ${safeFilePath} to commit ${safeCommitHash.substring(0, 8)}`);
 
     // Get the date from the commit for the commit message
     // Get the date from the commit for the commit message
-    const dateStr = (await gitRaw(['show', '-s', '--format=%aI', commitHash])).trim();
+    const dateStr = (await gitRaw(['show', '-s', '--format=%aI', safeCommitHash])).trim();
     const commitDate = new Date(dateStr).toLocaleString();
 
     // Restore the file - file watcher will detect and auto-commit
-    await restorePathToCommit(commitHash, filePath);
-    console.log(`[restore] File restored: ${filePath}`);
+    await restorePathToCommit(safeCommitHash, safeFilePath);
+    console.log(`[restore] File restored: ${safeFilePath}`);
     console.log(`[restore] File watcher will auto-commit this change`);
 
     let message = 'File restored (auto-commit pending)';
@@ -2712,7 +2973,7 @@ app.post('/api/restore-file', async (req, res) => {
     suppressAutoReload();
 
     // Check if we need to reload Home Assistant components
-    if (filePath.endsWith('automations.yaml')) {
+    if (safeFilePath.endsWith('automations.yaml')) {
       console.log('[restore] Reloading automations in Home Assistant...');
       const reloadResult = await callHomeAssistantService('automation', 'reload');
       if (reloadResult.success) {
@@ -2720,7 +2981,7 @@ app.post('/api/restore-file', async (req, res) => {
       } else {
         message += `. Automations reload failed: ${reloadResult.error}`;
       }
-    } else if (filePath.endsWith('scripts.yaml')) {
+    } else if (safeFilePath.endsWith('scripts.yaml')) {
       console.log('[restore] Reloading scripts in Home Assistant...');
       const reloadResult = await callHomeAssistantService('script', 'reload');
       if (reloadResult.success) {
@@ -2743,12 +3004,19 @@ app.post('/api/restore-commit', async (req, res) => {
     const { sourceHash, targetHash, commitHash } = req.body;
 
     // Backward compatibility: if only commitHash provided, use it for both source and target
-    const source = sourceHash || commitHash;
-    const target = targetHash || commitHash;
+    const rawSource = sourceHash || commitHash;
+    const rawTarget = targetHash || commitHash;
 
-    if (!source || !target) {
+    if (!rawSource || !rawTarget) {
       return res.status(400).json({ success: false, error: 'sourceHash and targetHash (or commitHash) required' });
     }
+
+    if (!isCommitish(rawSource) || !isCommitish(rawTarget)) {
+      return res.status(400).json({ success: false, error: 'Invalid commit hash' });
+    }
+
+    const source = rawSource.trim();
+    const target = rawTarget.trim();
 
     console.log(`[restore] Finding files from commit ${source.substring(0, 8)}`);
     console.log(`[restore] Restoring to version ${target.substring(0, 8)}`);
@@ -2862,23 +3130,29 @@ app.post('/api/git/hard-reset', async (req, res) => {
       return res.status(400).json({ success: false, error: 'commitHash is required' });
     }
 
-    console.log(`[hard-reset] Resetting ALL files to commit ${commitHash.substring(0, 8)}`);
+    if (!isCommitish(commitHash)) {
+      return res.status(400).json({ success: false, error: 'Invalid commit hash' });
+    }
+
+    const safeCommitHash = commitHash.trim();
+
+    console.log(`[hard-reset] Resetting ALL files to commit ${safeCommitHash.substring(0, 8)}`);
 
     // 1. Validate commit exists
     let commitExists;
     try {
-      commitExists = await gitRaw(['cat-file', '-t', commitHash]);
+      commitExists = await gitRaw(['cat-file', '-t', safeCommitHash]);
     } catch (error) {
       return res.status(400).json({
         success: false,
-        error: `Commit ${commitHash.substring(0, 8)} not found`
+        error: `Commit ${safeCommitHash.substring(0, 8)} not found`
       });
     }
 
     if (!commitExists.trim().startsWith('commit')) {
       return res.status(400).json({
         success: false,
-        error: `Invalid commit: ${commitHash.substring(0, 8)}`
+        error: `Invalid commit: ${safeCommitHash.substring(0, 8)}`
       });
     }
 
@@ -2896,7 +3170,7 @@ app.post('/api/git/hard-reset', async (req, res) => {
         if (!status.isClean()) {
           // Create backup commit
           const timestamp = new Date().toISOString();
-          const backupMessage = `Safety backup before hard reset to ${commitHash.substring(0, 8)} - ${timestamp}`;
+          const backupMessage = `Safety backup before hard reset to ${safeCommitHash.substring(0, 8)} - ${timestamp}`;
           await gitCommit(backupMessage);
 
           // Get the backup commit hash
@@ -2916,11 +3190,11 @@ app.post('/api/git/hard-reset', async (req, res) => {
     }
 
     // 3. Get list of all files in the target commit
-    console.log(`[hard-reset] Getting file list from commit ${commitHash.substring(0, 8)}`);
+    console.log(`[hard-reset] Getting file list from commit ${safeCommitHash.substring(0, 8)}`);
     let filesInCommit;
     try {
       // Use git ls-tree to get all files in the commit
-      const lsTree = await gitRaw(['ls-tree', '-r', '--name-only', commitHash]);
+      const lsTree = await gitRaw(['ls-tree', '-r', '--name-only', safeCommitHash]);
       filesInCommit = lsTree.trim().split('\n').filter(f => f);
       console.log(`[hard-reset] Found ${filesInCommit.length} files in target commit`);
     } catch (error) {
@@ -2932,18 +3206,18 @@ app.post('/api/git/hard-reset', async (req, res) => {
     }
 
     // 4. Checkout each file from the target commit
-    console.log(`[hard-reset] Checking out ${filesInCommit.length} files from ${commitHash.substring(0, 8)}`);
+    console.log(`[hard-reset] Checking out ${filesInCommit.length} files from ${safeCommitHash.substring(0, 8)}`);
     try {
       // Checkout all files
       for (const file of filesInCommit) {
-        await restorePathToCommit(commitHash, file);
+        await restorePathToCommit(safeCommitHash, file);
       }
-      console.log(`[hard-reset] All files checked out from ${commitHash.substring(0, 8)}`);
+      console.log(`[hard-reset] All files checked out from ${safeCommitHash.substring(0, 8)}`);
 
       // Get the commit date for a better commit message
       let commitDate = '';
       try {
-        const dateStr = (await gitRaw(['show', '-s', '--format=%aI', commitHash])).trim();
+        const dateStr = (await gitRaw(['show', '-s', '--format=%aI', safeCommitHash])).trim();
         const date = new Date(dateStr);
         commitDate = date.toLocaleString(undefined, {
           month: 'short',
@@ -2955,7 +3229,7 @@ app.post('/api/git/hard-reset', async (req, res) => {
         }).replace(',', '');
       } catch (error) {
         console.error('[hard-reset] Failed to get commit date:', error);
-        commitDate = commitHash.substring(0, 8);
+        commitDate = safeCommitHash.substring(0, 8);
       }
 
       // Auto-commit the changes
@@ -2970,9 +3244,9 @@ app.post('/api/git/hard-reset', async (req, res) => {
       res.json({
         success: true,
         backupCommitHash: backupHash,
-        resetToCommit: commitHash,
+        resetToCommit: safeCommitHash,
         filesRestored: filesInCommit.length,
-        message: `Restored ${filesInCommit.length} files to commit ${commitHash.substring(0, 8)}${backupHash ? '. Safety backup created.' : ''}`
+        message: `Restored ${filesInCommit.length} files to commit ${safeCommitHash.substring(0, 8)}${backupHash ? '. Safety backup created.' : ''}`
       });
     } catch (error) {
       console.error('[hard-reset] Checkout failed:', error);
@@ -2998,30 +3272,36 @@ app.post('/api/git/soft-reset', async (req, res) => {
       return res.status(400).json({ success: false, error: 'commitHash is required' });
     }
 
-    console.log(`[soft-reset] Soft resetting to commit ${commitHash.substring(0, 8)}`);
+    if (!isCommitish(commitHash)) {
+      return res.status(400).json({ success: false, error: 'Invalid commit hash' });
+    }
+
+    const safeCommitHash = commitHash.trim();
+
+    console.log(`[soft-reset] Soft resetting to commit ${safeCommitHash.substring(0, 8)}`);
 
     // 1. Validate commit exists
     let commitExists;
     try {
-      commitExists = await gitRaw(['cat-file', '-t', commitHash]);
+      commitExists = await gitRaw(['cat-file', '-t', safeCommitHash]);
     } catch (error) {
       return res.status(400).json({
         success: false,
-        error: `Commit ${commitHash.substring(0, 8)} not found`
+        error: `Commit ${safeCommitHash.substring(0, 8)} not found`
       });
     }
 
     if (!commitExists.trim().startsWith('commit')) {
       return res.status(400).json({
         success: false,
-        error: `Invalid commit: ${commitHash.substring(0, 8)}`
+        error: `Invalid commit: ${safeCommitHash.substring(0, 8)}`
       });
     }
 
     // 2. Count how many commits will be removed
     let commitsToRemove = 0;
     try {
-      const logOutput = await gitRaw(['log', '--oneline', `${commitHash}..HEAD`]);
+      const logOutput = await gitRaw(['log', '--oneline', `${safeCommitHash}..HEAD`]);
       commitsToRemove = logOutput.trim().split('\n').filter(l => l).length;
     } catch (error) {
       // If this fails, we can still proceed
@@ -3034,8 +3314,8 @@ app.post('/api/git/soft-reset', async (req, res) => {
       const headBefore = (await gitRaw(['rev-parse', 'HEAD'])).trim();
       console.log(`[soft-reset] HEAD before reset: ${headBefore.substring(0, 8)}`);
 
-      await gitRaw(['reset', '--soft', commitHash]);
-      console.log(`[soft-reset] Executed git reset --soft to ${commitHash.substring(0, 8)}`);
+      await gitRaw(['reset', '--soft', safeCommitHash]);
+      console.log(`[soft-reset] Executed git reset --soft to ${safeCommitHash.substring(0, 8)}`);
 
       // Verify HEAD actually changed
       const headAfter = (await gitRaw(['rev-parse', 'HEAD'])).trim();
@@ -3061,7 +3341,7 @@ app.post('/api/git/soft-reset', async (req, res) => {
     // 5. Get the commit date for the response
     let commitDate = '';
     try {
-      const dateStr = (await gitRaw(['show', '-s', '--format=%aI', commitHash])).trim();
+      const dateStr = (await gitRaw(['show', '-s', '--format=%aI', safeCommitHash])).trim();
       const date = new Date(dateStr);
       commitDate = date.toLocaleString(undefined, {
         month: 'short',
@@ -3072,12 +3352,12 @@ app.post('/api/git/soft-reset', async (req, res) => {
         hour12: true
       }).replace(',', '');
     } catch (error) {
-      commitDate = commitHash.substring(0, 8);
+      commitDate = safeCommitHash.substring(0, 8);
     }
 
     res.json({
       success: true,
-      commitHash: commitHash.substring(0, 8),
+      commitHash: safeCommitHash.substring(0, 8),
       commitsRemoved: commitsToRemove,
       commitDate: commitDate,
       message: `Soft reset to ${commitDate}. ${commitsToRemove} commit(s) removed from history.`
@@ -3144,9 +3424,21 @@ app.get('/api/git/status', async (req, res) => {
 // List YAML files (legacy)
 app.post('/api/list-yaml-files', async (req, res) => {
   try {
-    const { liveConfigPath, directory = '' } = req.body;
-    const searchPath = liveConfigPath || CONFIG_PATH;
-    const dirPath = directory ? `${searchPath}/${directory}` : searchPath;
+    const { liveConfigPath, directory = '' } = req.body || {};
+
+    // The body used to pick the directory to list, which let any caller read any
+    // directory on the host. It may only confirm the configured root.
+    if (liveConfigPath !== undefined && liveConfigPath !== null && liveConfigPath !== '') {
+      const resolvedLivePath = path.resolve(String(liveConfigPath));
+      if (!CONFIG_PATH || resolvedLivePath !== path.resolve(CONFIG_PATH)) {
+        return res.status(400).json({ success: false, error: 'liveConfigPath is not allowed' });
+      }
+    }
+
+    const dirPath = resolveInside(CONFIG_PATH, directory || '.', { allowRoot: true });
+    if (!dirPath) {
+      return res.status(400).json({ success: false, error: 'Invalid directory' });
+    }
 
     const allowedExtensions = getConfiguredExtensions();
     const files = fs.readdirSync(dirPath)
@@ -3164,7 +3456,7 @@ app.post('/api/list-yaml-files', async (req, res) => {
   }
 });
 
-function shouldIgnoreWatchPath(filePath) {
+function shouldIgnoreWatchPath(filePath, stats) {
   if (!filePath) return true;
 
   // Normalize path separators to forward slashes for consistent matching
@@ -3177,6 +3469,13 @@ function shouldIgnoreWatchPath(filePath) {
 
   // Ignore .storage files unless explicitly configured via include_storage
   if (normalizedPath.includes('/.storage/') && !isConfiguredStorageAbsolutePath(filePath)) {
+    return true;
+  }
+
+  // Watches are only needed for files HAVC can actually commit: configured extensions
+  // plus whitelisted .storage entries. Watching everything makes polling mode stat the
+  // whole config tree on every interval (deps, tts, www, model caches) for no benefit.
+  if (stats && stats.isFile() && !isFileTrackableForSync(filePath) && !isConfiguredStorageAbsolutePath(filePath)) {
     return true;
   }
 
@@ -3261,7 +3560,7 @@ function initializeWatcher() {
       stabilityThreshold: 2000,
       pollInterval: 100
     },
-    ignored: (filePath, stats) => shouldIgnoreWatchPath(filePath)
+    ignored: (filePath, stats) => shouldIgnoreWatchPath(filePath, stats)
   });
 
   // Handler function for both 'change' and 'add' events
@@ -3286,8 +3585,14 @@ function initializeWatcher() {
     // Set a new timer for this specific file
     const timer = setTimeout(async () => {
       try {
-        // Ensure git is initialized
+        // Ensure git is initialized. Throttle retries so a failing init does not spawn
+        // a full initialization for every file event.
         if (!gitInitialized) {
+          if (Date.now() - lastInitAttemptAt < INIT_RETRY_DELAY_MS) {
+            debounceTimers.delete(filePath);
+            return;
+          }
+          lastInitAttemptAt = Date.now();
           console.log('[watcher] Git not initialized yet, retrying...');
           await initRepo();
         }
@@ -3499,7 +3804,7 @@ async function initializeExternalWatchers() {
         stabilityThreshold: 2000,
         pollInterval: 100
       },
-      ignored: (filePath, stats) => shouldIgnoreWatchPath(filePath)
+      ignored: (filePath, stats) => shouldIgnoreWatchPath(filePath, stats)
     });
 
     externalWatcher.on('add', (filePath) => handleExternalWatcherEvent(filePath, 'added'));
@@ -3524,8 +3829,6 @@ app.get('/api/health', (req, res) => {
     additionalTrackedPaths,
     watching: CONFIG_PATH || '/config',
     time: new Date().toISOString(),
-    headers: req.headers,
-    url: req.originalUrl,
     url: req.originalUrl
   });
 });
@@ -4239,10 +4542,13 @@ app.get('/api/retention/status', async (req, res) => {
 
 // Debug endpoint to check ingress path detection
 app.get('/api/debug', (req, res) => {
+  if (readRuntimeEnv('HAVC_DEBUG') !== '1') {
+    return res.status(404).json({ success: false, error: 'Not found' });
+  }
+
   res.json({
     originalUrl: req.originalUrl,
     url: req.url,
-    headers: req.headers,
     ingressPath: req.headers['x-ingress-path'] ||
       req.headers['x-forwarded-prefix'] ||
       req.headers['x-external-url'] ||
@@ -4398,7 +4704,10 @@ app.get('/api/automation/:id/at-commit', async (req, res) => {
     if (!commitHash) {
       return res.status(400).json({ success: false, error: 'commitHash is required' });
     }
-    const result = await getAutomationAtCommit(id, commitHash, CONFIG_PATH);
+    if (!isCommitish(commitHash)) {
+      return res.status(400).json({ success: false, error: 'Invalid commit hash' });
+    }
+    const result = await getAutomationAtCommit(id, commitHash.trim(), CONFIG_PATH);
     res.json(result);
   } catch (error) {
     console.error('[automation at-commit] Error:', error);
@@ -4430,7 +4739,10 @@ app.get('/api/script/:id/at-commit', async (req, res) => {
     if (!commitHash) {
       return res.status(400).json({ success: false, error: 'commitHash is required' });
     }
-    const result = await getScriptAtCommit(id, commitHash, CONFIG_PATH);
+    if (!isCommitish(commitHash)) {
+      return res.status(400).json({ success: false, error: 'Invalid commit hash' });
+    }
+    const result = await getScriptAtCommit(id, commitHash.trim(), CONFIG_PATH);
     res.json(result);
   } catch (error) {
     console.error('[script at-commit] Error:', error);
@@ -4443,7 +4755,10 @@ app.get('/api/automation/:id/diff', async (req, res) => {
   try {
     const { id } = req.params;
     const { commitHash } = req.query;
-    const diff = await getAutomationDiff(id, commitHash, CONFIG_PATH);
+    if (!isCommitish(commitHash)) {
+      return res.status(400).json({ success: false, error: 'Invalid commit hash' });
+    }
+    const diff = await getAutomationDiff(id, commitHash.trim(), CONFIG_PATH);
     res.json({ success: true, diff });
   } catch (error) {
     console.error('[automation diff] Error:', error);
@@ -4456,7 +4771,10 @@ app.get('/api/script/:id/diff', async (req, res) => {
   try {
     const { id } = req.params;
     const { commitHash } = req.query;
-    const diff = await getScriptDiff(id, commitHash, CONFIG_PATH);
+    if (!isCommitish(commitHash)) {
+      return res.status(400).json({ success: false, error: 'Invalid commit hash' });
+    }
+    const diff = await getScriptDiff(id, commitHash.trim(), CONFIG_PATH);
     res.json({ success: true, diff });
   } catch (error) {
     console.error('[script diff] Error:', error);
@@ -4469,7 +4787,10 @@ app.post('/api/automation/:id/restore', async (req, res) => {
   try {
     const { id } = req.params;
     const { commitHash } = req.body;
-    const success = await restoreAutomation(id, commitHash, CONFIG_PATH);
+    if (!isCommitish(commitHash)) {
+      return res.status(400).json({ success: false, error: 'Invalid commit hash' });
+    }
+    const success = await restoreAutomation(id, commitHash.trim(), CONFIG_PATH);
 
     if (success) {
       // The watcher will also see the restored file, so skip its auto-reload
@@ -4497,7 +4818,10 @@ app.post('/api/script/:id/restore', async (req, res) => {
   try {
     const { id } = req.params;
     const { commitHash } = req.body;
-    const success = await restoreScript(id, commitHash, CONFIG_PATH);
+    if (!isCommitish(commitHash)) {
+      return res.status(400).json({ success: false, error: 'Invalid commit hash' });
+    }
+    const success = await restoreScript(id, commitHash.trim(), CONFIG_PATH);
 
     if (success) {
       // The watcher will also see the restored file, so skip its auto-reload

@@ -28,6 +28,7 @@ LABEL \
     org.opencontainers.image.version=${BUILD_VERSION}
 
 ENV LANG C.UTF-8
+ENV HOST=0.0.0.0
 
 # Install Node.js and npm
 RUN apk add --no-cache \

@@ -2,7 +2,7 @@
 
 **Automatic backup, history tracking, and instant restore for your Home Assistant configuration.**
 
-[![Release](https://img.shields.io/github/v/release/saihgupr/HomeAssistantVersionControl?style=flat-square&label=release)](https://github.com/saihgupr/HomeAssistantVersionControl/releases) [![Docker pulls](https://img.shields.io/badge/Docker_pulls-58.4K-blue?style=flat-square&logo=docker)](https://github.com/saihgupr/HomeAssistantVersionControl/pkgs/container/home-assistant-version-control) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](https://github.com/saihgupr/HomeAssistantVersionControl/blob/main/LICENSE)
+[![Release](https://img.shields.io/github/v/release/saihgupr/HomeAssistantVersionControl?style=flat-square&label=release)](https://github.com/saihgupr/HomeAssistantVersionControl/releases) [![Docker pulls](https://img.shields.io/badge/Docker_pulls-61.9K-blue?style=flat-square&logo=docker)](https://github.com/saihgupr/HomeAssistantVersionControl/pkgs/container/home-assistant-version-control) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](https://github.com/saihgupr/HomeAssistantVersionControl/blob/main/LICENSE)
 
 Home Assistant Version Control provides complete version history for your setup. It automatically tracks every change to your YAML configuration files using a robust local Git backend. Browse your history, visualize diffs, and restore individual files or your entire configuration to any previous state with a single click.
 
@@ -14,19 +14,33 @@ Home Assistant Version Control provides complete version history for your setup.
   <img src="https://github.com/saihgupr/HomeAssistantVersionControl/raw/develop/images/screenshots/ha-tweaks-version-history.png" width="960" alt="Version history navigation in the Home Assistant automation editor" />
 </p>
 
-## What's New in v1.6!
+## What's New in v1.7!
 
-v1.6 focuses on cloud sync and hands-free reloads.
+v1.7 adds API authentication for standalone Docker and cuts idle CPU.
+
+*   **API Authentication for Docker:** The standalone container now asks for HTTP Basic auth on `/api/*`. It is on by default there. The username is `havc`, and the password is generated on first start and saved to `/data/api-password`. Set `HAVC_USERNAME` and `HAVC_PASSWORD` to choose your own, or `HAVC_API_AUTH=off` behind an authenticating reverse proxy. The add-on behind Ingress is unchanged.
+*   **Lower Idle CPU:** The watcher now ignores files HAVC can never commit, so polling no longer stats dependency folders, model caches, and other large directories.
+*   **Faster Startup Recovery:** A stale `.git/index.lock` is cleared after ten minutes, and startup and watcher retries now share one initialization run instead of racing for the git lock.
+
+### Also in This Release
+
+*   **Optional Add-on Auth:** Added `api_auth` and `api_auth_password` for add-on users who publish port 54001 directly.
+*   **Input Validation:** Client-supplied paths and commit hashes are validated before use.
+*   **Exact-Match CORS:** `HAVC_ALLOWED_ORIGINS` takes an exact origin list instead of the old substring matching.
+
+<details>
+<summary>v1.6 highlights</summary>
+
+v1.6 focused on cloud sync and hands-free reloads.
 
 *   **Mirror Remote for Cloud Sync:** Add a second Git remote and every sync pushes to both. Use it for a redundant off-site copy, drift detection, or an audit repository. Mirror pushes are non-fatal, so a failure never blocks your primary backup.
 *   **Auto-reload Changed Components:** Optionally reload the Home Assistant domain that changed after each automatic backup. Edit automations, scripts, scenes, inputs, or templates and the matching reload service runs without a Developer Tools trip. Off by default.
 *   **Cleaner Cloud Sync Fields:** Token inputs no longer show the browser's password and autofill icons.
-
-### Also in This Release
-
 *   **Nested Git Repositories Documented:** Folders under `/config` with their own `.git` are skipped, so an ESPHome repo or similar no longer shows up as a broken submodule.
 *   **Embedded Credentials (from v1.5.2):** Custom remotes using `user:pass@` or `token@` authenticate reliably during automatic pushes and connection tests.
 *   **Masked Logs (from v1.5.1):** Tokens in remote URLs are redacted from startup logs and diagnostics.
+
+</details>
 
 <details>
 <summary>v1.5 highlights</summary>
@@ -146,6 +160,9 @@ There are two ways to install Home Assistant Version Control: as a Home Assistan
 
 ### 2. Standalone Docker Installation
 
+> [!WARNING]
+> The standalone container requires API authentication by default. Requests to `/api/*` need HTTP Basic auth, while static files and the `/` healthcheck stay open. If you don't set `HAVC_PASSWORD`, a password is generated on first start, printed in the container logs as `[auth] API password: ...`, and saved to `/data/api-password` inside the container. Set `HAVC_USERNAME` and `HAVC_PASSWORD` to use your own credentials. Set `HAVC_API_AUTH=off` only when an authenticating reverse proxy already sits in front of the container. For internet exposure, keep an authenticating reverse proxy in front and leave the port closed on untrusted networks.
+
 <details>
 <summary>Click to expand Docker deployment options</summary>
 
@@ -163,6 +180,8 @@ For Docker users who aren't using the Home Assistant app, you have three deploym
    nano compose.yaml
    # Update the volume path: /path/to/your/ha/config
    # Update timezone: TZ environment variable (e.g., America/New_York)
+   # Optional: set HAVC_USERNAME and HAVC_PASSWORD for API authentication
+   # Without HAVC_PASSWORD the generated one is in /data/api-password and the container logs
    ```
 
 3. Start the service:
@@ -170,7 +189,7 @@ For Docker users who aren't using the Home Assistant app, you have three deploym
    docker compose up -d
    ```
 
-Access the interface at `http://localhost:54001`.
+Access the interface at `http://localhost:54001`. Log in with your `HAVC_USERNAME` and `HAVC_PASSWORD`, or with `havc` and the generated password from the logs or `/data/api-password`.
 
 **Option B: Docker Run (pre-built image):**
 
@@ -179,6 +198,8 @@ docker run -d \
   -p 54001:54001 \
   -v /path/to/your/config:/config \
   -e TZ=America/New_York \
+  -e HAVC_USERNAME=havc \
+  -e HAVC_PASSWORD=choose-a-strong-password \
   -e SUPERVISOR_TOKEN=your_long_lived_access_token_here \
   -e HA_URL=http://homeassistant.local:8123 \
   --name home-assistant-version-control \
@@ -198,6 +219,8 @@ docker run -d \
   -p 54001:54001 \
   -v /path/to/your/config:/config \
   -e TZ=America/New_York \
+  -e HAVC_USERNAME=havc \
+  -e HAVC_PASSWORD=choose-a-strong-password \
   -e SUPERVISOR_TOKEN=your_long_lived_access_token_here \
   -e HA_URL=http://homeassistant.local:8123 \
   --name home-assistant-version-control \
@@ -206,6 +229,9 @@ docker run -d \
 
 > [!NOTE]
 > The `SUPERVISOR_TOKEN` and `HA_URL` are optional. You can omit those lines if you don't need Home Assistant restart/reload features.
+
+> [!NOTE]
+> API authentication is on by default. If you don't set `HAVC_PASSWORD`, the generated password is printed in the container logs and saved to `/data/api-password`. Mount `/data` so it survives container recreation. Set `HAVC_API_AUTH=off` only when an authenticating reverse proxy already protects the container.
 
 Access the interface at `http://localhost:54001`.
 
@@ -246,6 +272,8 @@ Notes:
 - Paths under `/config` are skipped because `/config` is already tracked automatically.
 - Files are still filtered by `include_extensions` and `exclude_files`.
 - For `.conf` files, add `conf` to `include_extensions`.
+
+By default the app relies on Ingress and Home Assistant authentication for the panel. If you expose port `54001` directly, set `api_auth: true` to require HTTP Basic auth on `/api/*`, and set `api_auth_password` to choose the password. If the password is left empty, HAVC generates one and stores it in `/data/api-password`.
 
 #### Manual mode (existing git repositories)
 

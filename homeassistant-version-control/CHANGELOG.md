@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.7.1]
+
+### Fixed & Improved
+- **Login Prompt on Mobile:** With API auth enabled, the app now asks for credentials before the interface loads instead of only protecting `/api/*`. Mobile browsers and embedded webviews no longer load a blank panel because they could not show a login dialog for background requests. The container healthcheck moved to the unauthenticated `/healthz` endpoint.
+
 ## [1.7.0]
 
 ### Security Hardening

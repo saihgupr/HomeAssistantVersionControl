@@ -331,10 +331,20 @@ app.use((req, res, next) => {
   next();
 });
 
-// API authentication runs after the ingress rewrite above so req.url is
-// already stripped of the /api prefix path prefix. It only guards /api:*,
-// leaving the SPA, static assets and the root healthcheck reachable.
-app.use('/api', basicAuth);
+// Container healthcheck. Kept unauthenticated so Docker and the Supervisor
+// can verify the app without credentials. It exposes no configuration.
+app.get('/healthz', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+// Authentication runs after the ingress rewrite above. When enabled it guards
+// the app itself as well as /api/*, so mobile browsers and embedded webviews
+// get a login prompt on the initial page load instead of failing silently on
+// the first background API request.
+app.use((req, res, next) => {
+  if (req.path === '/healthz') return next();
+  return basicAuth(req, res, next);
+});
 
 // Static files - serve public directory at root
 // Add cache control headers for JSON files to prevent stale translations

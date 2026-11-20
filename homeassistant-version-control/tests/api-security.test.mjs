@@ -119,7 +119,7 @@ async function waitFor(predicate, timeoutMs, message) {
   return false;
 }
 
-test('API requires basic auth and does not protect the SPA', async () => {
+test('API and app require basic auth, healthz stays open', async () => {
   const unauthorized = await fetch(`${base}/app-settings`);
   assert.equal(unauthorized.status, 401);
   assert.match(unauthorized.headers.get('www-authenticate') || '', /^Basic\b/);
@@ -128,9 +128,14 @@ test('API requires basic auth and does not protect the SPA', async () => {
     error: 'Authentication required',
   });
 
-  // Static shell stays reachable without credentials.
+  // The app itself is protected too, so mobile webviews get a prompt on load.
   const spa = await fetch(base.replace(/\/api$/, '/'));
-  assert.equal(spa.status, 200);
+  assert.equal(spa.status, 401);
+
+  // The container healthcheck stays unauthenticated.
+  const healthz = await fetch(base.replace(/\/api$/, '/healthz'));
+  assert.equal(healthz.status, 200);
+  assert.deepEqual(await healthz.json(), { status: 'ok' });
 });
 
 test('wrong credentials are rejected, correct credentials are accepted', async () => {

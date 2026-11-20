@@ -7,6 +7,18 @@
 - **Stale Git Lock Recovery:** A crashed git process could leave `.git/index.lock` behind and block every commit, which made the watcher retry initialization forever. The lock is now cleared on startup when it is older than ten minutes.
 - **Serialized Initialization:** Startup and watcher retries now share one initialization run and retries are throttled, instead of racing each other for `index.lock` and spawning duplicate git processes.
 
+## [1.7.0]
+
+### Security
+- **API Authentication (GHSA-vm55-p93v-fr5f):** The standalone API now requires HTTP Basic authentication on `/api/*` routes only; static files and the `/` healthcheck stay open. Authentication is on by default in Docker. If no password is supplied, one is generated on first start, written to `/data/api-password` (mode 0600), and printed in the container logs as `[auth] API password: ...`. Set `HAVC_USERNAME` and `HAVC_PASSWORD` to choose your own credentials, or `HAVC_API_AUTH=off` when an authenticating reverse proxy sits in front of the container.
+- **App Authentication Options:** Added `api_auth` (default `false`) and `api_auth_password` for direct access to port 54001. When `api_auth` is off, Ingress and Home Assistant authentication still protect the panel.
+- **Path and Commit Validation:** All client-supplied paths are checked for traversal, and invalid paths or commit hashes are rejected with `400`.
+- **Exact-Match CORS Allowlist:** `HAVC_ALLOWED_ORIGINS` takes a comma-separated list of exact origins. The previous substring matching is gone, and no CORS headers are sent when the list is empty.
+- **Header Echo Removed:** `/api/health` and `/api/debug` no longer echo request headers. `/api/debug` only responds when `HAVC_DEBUG=1`.
+
+### Fixed & Improved
+- **Loopback by Default:** `HOST` now defaults to `127.0.0.1` for bare-metal runs. The Docker image sets `HOST=0.0.0.0` so containers and the app keep listening on all interfaces.
+
 ## [1.6.1]
 
 ### Fixed & Improved

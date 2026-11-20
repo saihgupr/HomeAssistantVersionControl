@@ -71,6 +71,7 @@ async function startServer(config, { manualMode = false, env = {} } = {}) {
       CONFIG_PATH: config,
       PORT: String(port),
       HOST: '127.0.0.1',
+      HAVC_API_AUTH: 'off',
       MANUAL_MODE: String(manualMode),
       DEBOUNCE_TIME: '1',
       DEBOUNCE_TIME_UNIT: 'seconds',

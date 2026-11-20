@@ -174,6 +174,7 @@ test('Cloud Sync extracts embedded username:password in remoteUrl, configures ex
       DATA_PATH: dataDir,
       HOME: homeDir,
       GIT_CONFIG_NOSYSTEM: '1',
+      HAVC_API_AUTH: 'off',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -290,6 +291,7 @@ test('Cloud Sync extracts embedded personal access token in remoteUrl and config
       DATA_PATH: dataDir,
       HOME: homeDir,
       GIT_CONFIG_NOSYSTEM: '1',
+      HAVC_API_AUTH: 'off',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

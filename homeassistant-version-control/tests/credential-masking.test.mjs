@@ -70,6 +70,7 @@ test('startup masks embedded tokens in config.remote_url and options.json', asyn
       DATA_PATH: dataDir,
       HOME: homeDir,
       GIT_CONFIG_NOSYSTEM: '1',
+      HAVC_API_AUTH: 'off',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -131,6 +132,7 @@ test('cloud-sync settings endpoint masks embedded url tokens and redacts authTok
       DATA_PATH: dataDir,
       HOME: homeDir,
       GIT_CONFIG_NOSYSTEM: '1',
+      HAVC_API_AUTH: 'off',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

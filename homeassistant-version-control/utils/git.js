@@ -2,6 +2,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
+import { toRepoRelative, assertCommitish, realPathInsideParent } from './path-safety.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -184,14 +185,26 @@ export async function gitStatus() {
 }
 
 export async function gitShowFileAtCommit(commitHash, filePath) {
-    // Properly escape filePath for git (handles spaces, special chars)
-    // Actually execFile handles arguments safely, we don't need manual quoting if passed as array arg
-    const { stdout } = await gitExec(['show', `${commitHash}:${filePath}`]);
+    const hash = assertCommitish(commitHash);
+
+    // Normalize the path when we have a config root to anchor against.
+    // Standalone unit-test imports may not set CONFIG_PATH.
+    let repoPath = filePath;
+    if (global.CONFIG_PATH) {
+        repoPath = toRepoRelative(global.CONFIG_PATH, filePath);
+        if (repoPath === null) {
+            throw new Error('Refusing to read a path outside the config root');
+        }
+    }
+
+    // execFile handles arguments safely, no manual quoting needed
+    const { stdout } = await gitExec(['show', `${hash}:${repoPath}`]);
     return stdout;
 }
 
 export async function gitCommitDetails(commitHash) {
-    const { stdout } = await gitExec(['show', '--name-status', '--oneline', commitHash]);
+    const hash = assertCommitish(commitHash);
+    const { stdout } = await gitExec(['show', '--name-status', '--oneline', hash]);
     return stdout;
 }
 
@@ -273,7 +286,23 @@ export async function gitCheckout(args) {
  * @param {string} filePath - The file path relative to CONFIG_PATH
  */
 export async function gitCheckoutSafe(commitHash, filePath) {
-    const fullPath = path.join(global.CONFIG_PATH, filePath);
+    const hash = assertCommitish(commitHash);
+
+    // Anchor the user-supplied path to the config root and reject traversal
+    // before touching the filesystem.
+    const repoPath = toRepoRelative(global.CONFIG_PATH, filePath);
+    if (repoPath === null) {
+        throw new Error('Refusing to restore a path outside the config root');
+    }
+
+    const fullPath = path.join(global.CONFIG_PATH, repoPath);
+
+    // Also follow symlinks on the nearest existing ancestor, so a symlinked
+    // directory cannot be used to write outside the config root.
+    if (!(await realPathInsideParent(global.CONFIG_PATH, fullPath))) {
+        throw new Error('Refusing to restore a path outside the config root');
+    }
+
     let backupContent = null;
 
     // First, try to backup the existing file content (in case restore fails)
@@ -286,7 +315,7 @@ export async function gitCheckoutSafe(commitHash, filePath) {
     try {
         // Get the file content from the commit using git show
         // This avoids git checkout entirely, which has issues with CIFS/SMB mounts
-        const { stdout: newContent } = await gitExec(['show', `${commitHash}:${filePath}`]);
+        const { stdout: newContent } = await gitExec(['show', `${hash}:${repoPath}`]);
 
         // Ensure parent directory exists
         const dir = path.dirname(fullPath);

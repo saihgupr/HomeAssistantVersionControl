@@ -86,6 +86,7 @@ async function startServer(config, { haUrl, autoReload, dataPath }) {
       CONFIG_PATH: config,
       PORT: String(port),
       HOST: '127.0.0.1',
+      HAVC_API_AUTH: 'off',
       SUPERVISOR_TOKEN: 'test-token',
       HA_URL: haUrl,
       AUTO_RELOAD: String(autoReload),

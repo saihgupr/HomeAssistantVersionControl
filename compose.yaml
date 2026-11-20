@@ -18,6 +18,15 @@ services:
       # Optional: Home Assistant URL (required for Docker mode to enable reload/restart features)
       # Format: http://homeassistant.local:8123 or http://192.168.1.100:8123
       - HA_URL=http://homeassistant.local:8123
+
+      # API authentication is on by default. Leave these commented out to use the
+      # generated password, which is written to /data/api-password and printed in
+      # the container logs as "[auth] API password: ...".
+      # - HAVC_USERNAME=havc
+      # - HAVC_PASSWORD=choose-a-strong-password
+
+      # Set to off only if an authenticating reverse proxy sits in front of this container
+      # - HAVC_API_AUTH=off
     volumes:
       # Mount your Home Assistant config directory
       # This directory will be tracked for changes

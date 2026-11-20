@@ -148,7 +148,7 @@ There are two ways to install Home Assistant Version Control: as a Home Assistan
 ### 2. Standalone Docker Installation
 
 > [!WARNING]
-> The standalone container has no authentication on its API. Anything that can reach port `54001` can read your Home Assistant configuration and trigger restores. Keep the port on a local or trusted network, never expose it to the internet, and put an authenticating reverse proxy in front of it if you need remote access.
+> The standalone container requires API authentication by default. Requests to `/api/*` need HTTP Basic auth, while static files and the `/` healthcheck stay open. If you don't set `HAVC_PASSWORD`, a password is generated on first start, printed in the container logs as `[auth] API password: ...`, and saved to `/data/api-password` inside the container. Set `HAVC_USERNAME` and `HAVC_PASSWORD` to use your own credentials. Set `HAVC_API_AUTH=off` only when an authenticating reverse proxy already sits in front of the container. For internet exposure, keep an authenticating reverse proxy in front and leave the port closed on untrusted networks.
 
 For Docker users who aren't using the Home Assistant app, you have three deployment options:
 
@@ -164,6 +164,8 @@ For Docker users who aren't using the Home Assistant app, you have three deploym
    nano compose.yaml
    # Update the volume path: /path/to/your/ha/config
    # Update timezone: TZ environment variable (e.g., America/New_York)
+   # Optional: set HAVC_USERNAME and HAVC_PASSWORD for API authentication
+   # Without HAVC_PASSWORD the generated one is in /data/api-password and the container logs
    ```
 
 3. Start the service:
@@ -171,7 +173,7 @@ For Docker users who aren't using the Home Assistant app, you have three deploym
    docker compose up -d
    ```
 
-Access the interface at `http://localhost:54001`.
+Access the interface at `http://localhost:54001`. Log in with your `HAVC_USERNAME` and `HAVC_PASSWORD`, or with `havc` and the generated password from the logs or `/data/api-password`.
 
 **Option B: Docker Run (pre-built image):**
 
@@ -180,6 +182,8 @@ docker run -d \
   -p 54001:54001 \
   -v /path/to/your/config:/config \
   -e TZ=America/New_York \
+  -e HAVC_USERNAME=havc \
+  -e HAVC_PASSWORD=choose-a-strong-password \
   -e SUPERVISOR_TOKEN=your_long_lived_access_token_here \
   -e HA_URL=http://homeassistant.local:8123 \
   --name home-assistant-version-control \
@@ -199,6 +203,8 @@ docker run -d \
   -p 54001:54001 \
   -v /path/to/your/config:/config \
   -e TZ=America/New_York \
+  -e HAVC_USERNAME=havc \
+  -e HAVC_PASSWORD=choose-a-strong-password \
   -e SUPERVISOR_TOKEN=your_long_lived_access_token_here \
   -e HA_URL=http://homeassistant.local:8123 \
   --name home-assistant-version-control \
@@ -207,6 +213,9 @@ docker run -d \
 
 > [!NOTE]
 > The `SUPERVISOR_TOKEN` and `HA_URL` are optional. You can omit those lines if you don't need Home Assistant restart/reload features.
+
+> [!NOTE]
+> API authentication is on by default. If you don't set `HAVC_PASSWORD`, the generated password is printed in the container logs and saved to `/data/api-password`. Mount `/data` so it survives container recreation. Set `HAVC_API_AUTH=off` only when an authenticating reverse proxy already protects the container.
 
 Access the interface at `http://localhost:54001`.
 
@@ -245,6 +254,8 @@ Notes:
 - Paths under `/config` are skipped because `/config` is already tracked automatically.
 - Files and folders are filtered by `include_extensions`, `exclude_files` (or `exclude`), and `exclude_folders`.
 - For `.conf` files, add `conf` to `include_extensions`.
+
+By default the app relies on Ingress and Home Assistant authentication for the panel. If you expose port `54001` directly, set `api_auth: true` to require HTTP Basic auth on `/api/*`, and set `api_auth_password` to choose the password. If the password is left empty, HAVC generates one and stores it in `/data/api-password`.
 
 #### Manual mode (existing git repositories)
 

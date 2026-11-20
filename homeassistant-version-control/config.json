@@ -54,7 +54,7 @@
     "legacy_arrow_direction": false,
     "exclude": [],
     "exclude_folders": [],
-    "watcher_use_polling": true,
+    "watcher_use_polling": false,
     "watcher_interval": 2000,
     "auto_reload": false
   },

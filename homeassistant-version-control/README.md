@@ -347,11 +347,12 @@ For containerized deployments (especially when not persisting the `/data` direct
 | `EXCLUDE_FOLDERS` | Excluded Folders | List | Comma-separated (e.g. `backups,temp`) | `[]` |
 | `INCLUDE_STORAGE` | Included .storage patterns | List | Comma-separated (e.g. `lovelace,core.entity_registry`) | `lovelace*` |
 | `ADDITIONAL_PATHS` | Additional Watch Paths | List | Comma-separated (e.g. `/share,/media`) | `[]` |
-| `WATCHER_USE_POLLING` | Use Polling for Watcher | Boolean | `true`, `false`, `yes`, `no`, `1`, `0` | `true` |
+| `WATCHER_USE_POLLING` | Use Polling for Watcher | Boolean | `true`, `false`, `yes`, `no`, `1`, `0` | `false` |
 | `WATCHER_INTERVAL` | Watcher Polling Interval | Number | ≥ 100 (milliseconds) | `2000` |
 | `MANUAL_MODE` | Manual Mode (no auto-commits, repo left untouched) | Boolean | `true`, `false`, `yes`, `no`, `1`, `0` | `false` |
 
 **Notes:**
+- Polling (`WATCHER_USE_POLLING`) is only needed on network mounts where native file events do not fire. Leave it off for local disks: polling stats every watched file on each interval and can use significant CPU on a large config tree.
 - Boolean values are case-insensitive and accept: `true`/`false`, `yes`/`no`, `1`/`0`
 - String values (units, types) are case-insensitive: `SECONDS` and `seconds` are equivalent
 - Invalid values trigger warnings in logs and fall back to defaults

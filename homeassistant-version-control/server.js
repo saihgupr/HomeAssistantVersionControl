@@ -448,6 +448,8 @@ let additionalTrackedPaths = [];
 const debounceTimers = new Map();
 let watcher = null;
 const externalWatchers = [];
+const INIT_RETRY_DELAY_MS = 15000;
+let lastInitAttemptAt = 0;
 let configOptions = {
   yaml_format: true,
   json_format: false,
@@ -499,7 +501,7 @@ let runtimeSettings = {
   manualMode: false,
   autoReload: false,
   legacyArrowDirection: false,
-  watcherUsePolling: true,
+  watcherUsePolling: false,
   watcherInterval: 2000
 };
 
@@ -1585,7 +1587,42 @@ async function setupCaCertificates() {
   }
 }
 
-async function initRepo() {
+/**
+ * Remove a Git lock left behind by a crashed or killed process. A stale index.lock makes
+ * every git command fail forever, which turns the watcher into an endless init retry loop.
+ */
+async function clearStaleGitLock(repoPath, maxAgeMs = 10 * 60 * 1000) {
+  const lockPath = path.join(repoPath, '.git', 'index.lock');
+  try {
+    const stats = await fsPromises.stat(lockPath);
+    if (Date.now() - stats.mtimeMs < maxAgeMs) {
+      return;
+    }
+    await fsPromises.unlink(lockPath);
+    console.log(`[init] Removed stale Git lock (${Math.round((Date.now() - stats.mtimeMs) / 1000)}s old): ${lockPath}`);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.error('[init] Could not check Git lock:', error.message);
+    }
+  }
+}
+
+let initRepoPromise = null;
+
+/**
+ * Serialize initialization. Startup and watcher retries can overlap; letting them run
+ * concurrently makes them fight over .git/index.lock and burn CPU.
+ */
+function initRepo() {
+  if (!initRepoPromise) {
+    initRepoPromise = initRepoInternal().finally(() => {
+      initRepoPromise = null;
+    });
+  }
+  return initRepoPromise;
+}
+
+async function initRepoInternal() {
   // Load runtime settings first
   await loadRuntimeSettings();
 
@@ -1762,6 +1799,7 @@ async function initRepo() {
       console.log(`[external-sync] Startup sync complete: paths=${externalSyncStats.paths}, copied=${externalSyncStats.copied}, removed=${externalSyncStats.removed}`);
     }
 
+    await clearStaleGitLock(CONFIG_PATH);
     const isRepo = await gitCheckIsRepo();
 
     // Check for nested git repositories to ignore
@@ -3164,7 +3202,7 @@ app.post('/api/list-yaml-files', async (req, res) => {
   }
 });
 
-function shouldIgnoreWatchPath(filePath) {
+function shouldIgnoreWatchPath(filePath, stats) {
   if (!filePath) return true;
 
   // Normalize path separators to forward slashes for consistent matching
@@ -3177,6 +3215,13 @@ function shouldIgnoreWatchPath(filePath) {
 
   // Ignore .storage files unless explicitly configured via include_storage
   if (normalizedPath.includes('/.storage/') && !isConfiguredStorageAbsolutePath(filePath)) {
+    return true;
+  }
+
+  // Watches are only needed for files HAVC can actually commit: configured extensions
+  // plus whitelisted .storage entries. Watching everything makes polling mode stat the
+  // whole config tree on every interval (deps, tts, www, model caches) for no benefit.
+  if (stats && stats.isFile() && !isFileTrackableForSync(filePath) && !isConfiguredStorageAbsolutePath(filePath)) {
     return true;
   }
 
@@ -3261,7 +3306,7 @@ function initializeWatcher() {
       stabilityThreshold: 2000,
       pollInterval: 100
     },
-    ignored: (filePath, stats) => shouldIgnoreWatchPath(filePath)
+    ignored: (filePath, stats) => shouldIgnoreWatchPath(filePath, stats)
   });
 
   // Handler function for both 'change' and 'add' events
@@ -3286,8 +3331,14 @@ function initializeWatcher() {
     // Set a new timer for this specific file
     const timer = setTimeout(async () => {
       try {
-        // Ensure git is initialized
+        // Ensure git is initialized. Throttle retries so a failing init does not spawn
+        // a full initialization for every file event.
         if (!gitInitialized) {
+          if (Date.now() - lastInitAttemptAt < INIT_RETRY_DELAY_MS) {
+            debounceTimers.delete(filePath);
+            return;
+          }
+          lastInitAttemptAt = Date.now();
           console.log('[watcher] Git not initialized yet, retrying...');
           await initRepo();
         }
@@ -3499,7 +3550,7 @@ async function initializeExternalWatchers() {
         stabilityThreshold: 2000,
         pollInterval: 100
       },
-      ignored: (filePath, stats) => shouldIgnoreWatchPath(filePath)
+      ignored: (filePath, stats) => shouldIgnoreWatchPath(filePath, stats)
     });
 
     externalWatcher.on('add', (filePath) => handleExternalWatcherEvent(filePath, 'added'));

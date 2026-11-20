@@ -41,8 +41,11 @@
 
   function isApiRequest(url) {
     try {
-      const path = new URL(url, window.location.href).pathname;
-      return path === '/api' || path.startsWith('/api/');
+      const parsed = new URL(url, window.location.href);
+      // Never attach credentials to another origin, even if its path looks
+      // like an API route.
+      if (parsed.origin !== window.location.origin) return false;
+      return parsed.pathname === '/api' || parsed.pathname.startsWith('/api/');
     } catch (error) {
       return false;
     }

@@ -18,7 +18,7 @@ Home Assistant Version Control provides complete version history for your setup.
 
 v1.7 adds API authentication for standalone Docker and cuts idle CPU.
 
-*   **API Authentication for Docker:** The standalone container now asks for HTTP Basic auth before the app loads. It is on by default there. The username is `havc`, and the password is generated on first start and saved to `/data/api-password`. Set `HAVC_USERNAME` and `HAVC_PASSWORD` to choose your own, or `HAVC_API_AUTH=off` behind an authenticating reverse proxy. The add-on behind Ingress is unchanged.
+*   **API Authentication for Docker:** The standalone container now asks for a username and password in the app. It is on by default there. The username is `havc`, and the password is generated on first start and saved to `/data/api-password`. Set `HAVC_USERNAME` and `HAVC_PASSWORD` to choose your own, or `HAVC_API_AUTH=off` behind an authenticating reverse proxy. The add-on behind Ingress is unchanged.
 *   **Lower Idle CPU:** The watcher now ignores files HAVC can never commit, so polling no longer stats dependency folders, model caches, and other large directories.
 *   **Faster Startup Recovery:** A stale `.git/index.lock` is cleared after ten minutes, and startup and watcher retries now share one initialization run instead of racing for the git lock.
 
@@ -162,7 +162,7 @@ There are two ways to install Home Assistant Version Control: as a Home Assistan
 ### 2. Standalone Docker Installation
 
 > [!WARNING]
-> The standalone container requires API authentication by default. The container asks for HTTP Basic auth before the app loads. The `/healthz` endpoint stays open for the container healthcheck. If you don't set `HAVC_PASSWORD`, a password is generated on first start, printed in the container logs as `[auth] API password: ...`, and saved to `/data/api-password` inside the container. Set `HAVC_USERNAME` and `HAVC_PASSWORD` to use your own credentials. Set `HAVC_API_AUTH=off` only when an authenticating reverse proxy already sits in front of the container. For internet exposure, keep an authenticating reverse proxy in front and leave the port closed on untrusted networks.
+> The standalone container requires API authentication by default. The app asks for a username and password when API auth is enabled. The login form works in the Home Assistant Companion app as well as a normal browser. The `/healthz` endpoint stays open for the container healthcheck. If you don't set `HAVC_PASSWORD`, a password is generated on first start, printed in the container logs as `[auth] API password: ...`, and saved to `/data/api-password` inside the container. Set `HAVC_USERNAME` and `HAVC_PASSWORD` to use your own credentials. Set `HAVC_API_AUTH=off` only when an authenticating reverse proxy already sits in front of the container. For internet exposure, keep an authenticating reverse proxy in front and leave the port closed on untrusted networks.
 
 For Docker users who aren't using the Home Assistant app, you have three deployment options:
 

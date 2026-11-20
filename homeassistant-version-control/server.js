@@ -221,7 +221,14 @@ function basicAuth(req, res, next) {
     }
   }
 
-  res.set('WWW-Authenticate', 'Basic realm="Home Assistant Version Control", charset="UTF-8"');
+  // Do not trigger the browser's native dialog for the app's own fetch calls.
+  // The app shows its own login form, which also works inside the Home
+  // Assistant Companion webview where the native dialog is not available.
+  const wantsJson = req.headers['x-requested-with'] === 'XMLHttpRequest' ||
+    (req.headers.accept || '').includes('application/json');
+  if (!wantsJson) {
+    res.set('WWW-Authenticate', 'Basic realm="Home Assistant Version Control", charset="UTF-8"');
+  }
   return res.status(401).json({ success: false, error: 'Authentication required' });
 }
 
@@ -337,14 +344,11 @@ app.get('/healthz', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Authentication runs after the ingress rewrite above. When enabled it guards
-// the app itself as well as /api/*, so mobile browsers and embedded webviews
-// get a login prompt on the initial page load instead of failing silently on
-// the first background API request.
-app.use((req, res, next) => {
-  if (req.path === '/healthz') return next();
-  return basicAuth(req, res, next);
-});
+// API authentication runs after the ingress rewrite above. The app shell and
+// static assets stay reachable so the app can show its own login form; that
+// form works in the Home Assistant Companion app, where the browser's native
+// HTTP Basic dialog is not available inside an ingress frame.
+app.use('/api', basicAuth);
 
 // Static files - serve public directory at root
 // Add cache control headers for JSON files to prevent stale translations

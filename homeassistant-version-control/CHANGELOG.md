@@ -5,7 +5,7 @@
 ## [1.7.1]
 
 ### Fixed & Improved
-- **Login Prompt on Mobile:** With API auth enabled, the app now asks for credentials before the interface loads instead of only protecting `/api/*`. Mobile browsers and embedded webviews no longer load a blank panel because they could not show a login dialog for background requests. The container healthcheck moved to the unauthenticated `/healthz` endpoint.
+- **In-App Login for API Auth:** When API auth is enabled, the app now shows its own username and password form instead of relying on the browser's HTTP Basic dialog. This works in the Home Assistant Companion app and other embedded webviews, where the native dialog is unavailable. The container healthcheck moved to the unauthenticated `/healthz` endpoint.
 
 ## [1.7.0]
 

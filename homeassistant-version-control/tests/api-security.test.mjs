@@ -119,7 +119,7 @@ async function waitFor(predicate, timeoutMs, message) {
   return false;
 }
 
-test('API and app require basic auth, healthz stays open', async () => {
+test('API requires basic auth, the app shell and healthz stay open', async () => {
   const unauthorized = await fetch(`${base}/app-settings`);
   assert.equal(unauthorized.status, 401);
   assert.match(unauthorized.headers.get('www-authenticate') || '', /^Basic\b/);
@@ -128,9 +128,16 @@ test('API and app require basic auth, healthz stays open', async () => {
     error: 'Authentication required',
   });
 
-  // The app itself is protected too, so mobile webviews get a prompt on load.
+  // The app shell stays reachable so it can show the in-app login form.
   const spa = await fetch(base.replace(/\/api$/, '/'));
-  assert.equal(spa.status, 401);
+  assert.equal(spa.status, 200);
+
+  // The in-app fetch asks for JSON, so it gets no native browser challenge.
+  const xhr = await fetch(`${base}/app-settings`, {
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+  });
+  assert.equal(xhr.status, 401);
+  assert.equal(xhr.headers.get('www-authenticate'), null);
 
   // The container healthcheck stays unauthenticated.
   const healthz = await fetch(base.replace(/\/api$/, '/healthz'));

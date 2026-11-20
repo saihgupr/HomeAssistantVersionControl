@@ -2,11 +2,6 @@
 
 ## [Unreleased]
 
-### Fixed & Improved
-- **Lower CPU Usage:** The watcher now ignores files HAVC can never commit (everything outside the configured extensions and whitelisted `.storage` files), so polling no longer stats `deps`, `tts`, `www`, model caches, and other large folders. Polling is off by default; enable it only for network mounts that need it.
-- **Stale Git Lock Recovery:** A crashed git process could leave `.git/index.lock` behind and block every commit, which made the watcher retry initialization forever. The lock is now cleared on startup when it is older than ten minutes.
-- **Serialized Initialization:** Startup and watcher retries now share one initialization run and retries are throttled, instead of racing each other for `index.lock` and spawning duplicate git processes.
-
 ## [1.7.0]
 
 ### Security Hardening
@@ -15,6 +10,9 @@
 - **Exact-Match CORS Allowlist:** `HAVC_ALLOWED_ORIGINS` takes a comma-separated list of exact origins. No CORS headers are sent when the list is empty.
 
 ### Fixed & Improved
+- **Lower CPU Usage:** The watcher now ignores files HAVC can never commit (everything outside the configured extensions and whitelisted `.storage` files), so polling no longer stats `deps`, `tts`, `www`, model caches, and other large folders. Polling is off by default; enable it only for network mounts that need it.
+- **Stale Git Lock Recovery:** A crashed git process could leave `.git/index.lock` behind and block every commit, which made the watcher retry initialization forever. The lock is now cleared on startup when it is older than ten minutes.
+- **Serialized Initialization:** Startup and watcher retries now share one initialization run and retries are throttled, instead of racing each other for `index.lock` and spawning duplicate git processes.
 - **Path and Commit Validation:** All client-supplied paths are checked for traversal, and invalid paths or commit hashes are rejected with `400`.
 - **Quieter Health and Debug Endpoints:** `/api/health` and `/api/debug` no longer echo request headers. `/api/debug` only responds when `HAVC_DEBUG=1`.
 - **Loopback by Default:** `HOST` now defaults to `127.0.0.1` for bare-metal runs. The Docker image sets `HOST=0.0.0.0` so containers and the app keep listening on all interfaces.

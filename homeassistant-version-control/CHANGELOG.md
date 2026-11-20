@@ -9,15 +9,16 @@
 
 ## [1.7.0]
 
-### Security
-- **API Authentication (GHSA-vm55-p93v-fr5f):** The standalone API now requires HTTP Basic authentication on `/api/*` routes only; static files and the `/` healthcheck stay open. Authentication is on by default in Docker. If no password is supplied, one is generated on first start, written to `/data/api-password` (mode 0600), and printed in the container logs as `[auth] API password: ...`. Set `HAVC_USERNAME` and `HAVC_PASSWORD` to choose your own credentials, or `HAVC_API_AUTH=off` when an authenticating reverse proxy sits in front of the container.
-- **App Authentication Options:** Added `api_auth` (default `false`) and `api_auth_password` for direct access to port 54001. When `api_auth` is off, Ingress and Home Assistant authentication still protect the panel.
-- **Path and Commit Validation:** All client-supplied paths are checked for traversal, and invalid paths or commit hashes are rejected with `400`.
-- **Exact-Match CORS Allowlist:** `HAVC_ALLOWED_ORIGINS` takes a comma-separated list of exact origins. The previous substring matching is gone, and no CORS headers are sent when the list is empty.
-- **Header Echo Removed:** `/api/health` and `/api/debug` no longer echo request headers. `/api/debug` only responds when `HAVC_DEBUG=1`.
+### Security Hardening
+- **API Authentication for Docker:** The standalone container can now ask for HTTP Basic auth on `/api/*` routes. It is on by default there because that deployment listens on the network. Static files and the `/` healthcheck stay open. If you do not set a password, one is generated on first start, written to `/data/api-password` (mode 0600), and printed in the container logs. Set `HAVC_USERNAME` and `HAVC_PASSWORD` to choose your own, or `HAVC_API_AUTH=off` when an authenticating reverse proxy already protects the container.
+- **Add-on Authentication Option:** Added `api_auth` (default `false`) and `api_auth_password` for add-on users who publish port 54001 directly. With `api_auth` off, Ingress and Home Assistant authentication still protect the panel.
+- **Exact-Match CORS Allowlist:** `HAVC_ALLOWED_ORIGINS` takes a comma-separated list of exact origins. No CORS headers are sent when the list is empty.
 
 ### Fixed & Improved
+- **Path and Commit Validation:** All client-supplied paths are checked for traversal, and invalid paths or commit hashes are rejected with `400`.
+- **Quieter Health and Debug Endpoints:** `/api/health` and `/api/debug` no longer echo request headers. `/api/debug` only responds when `HAVC_DEBUG=1`.
 - **Loopback by Default:** `HOST` now defaults to `127.0.0.1` for bare-metal runs. The Docker image sets `HOST=0.0.0.0` so containers and the app keep listening on all interfaces.
+- **Scope:** The add-on behind Ingress was not exposed as long as port 54001 was not published. The standalone Docker deployment was the one that needed this hardening. Details are in advisory GHSA-vm55-p93v-fr5f.
 
 ## [1.6.1]
 

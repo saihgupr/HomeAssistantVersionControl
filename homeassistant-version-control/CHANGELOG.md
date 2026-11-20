@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.7.1]
+
+### Fixed & Improved
+- **In-App Login for API Auth:** When API auth is enabled, the app now shows its own username and password form instead of relying on the browser's HTTP Basic dialog. This works in the Home Assistant Companion app and other embedded webviews, where the native dialog is unavailable. The container healthcheck moved to the unauthenticated `/healthz` endpoint.
+
 ## [1.7.0]
 
 ### Security Hardening

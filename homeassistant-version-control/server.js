@@ -221,7 +221,14 @@ function basicAuth(req, res, next) {
     }
   }
 
-  res.set('WWW-Authenticate', 'Basic realm="Home Assistant Version Control", charset="UTF-8"');
+  // Do not trigger the browser's native dialog for the app's own fetch calls.
+  // The app shows its own login form, which also works inside the Home
+  // Assistant Companion webview where the native dialog is not available.
+  const wantsJson = req.headers['x-requested-with'] === 'XMLHttpRequest' ||
+    (req.headers.accept || '').includes('application/json');
+  if (!wantsJson) {
+    res.set('WWW-Authenticate', 'Basic realm="Home Assistant Version Control", charset="UTF-8"');
+  }
   return res.status(401).json({ success: false, error: 'Authentication required' });
 }
 
@@ -331,9 +338,16 @@ app.use((req, res, next) => {
   next();
 });
 
-// API authentication runs after the ingress rewrite above so req.url is
-// already stripped of the /api prefix path prefix. It only guards /api:*,
-// leaving the SPA, static assets and the root healthcheck reachable.
+// Container healthcheck. Kept unauthenticated so Docker and the Supervisor
+// can verify the app without credentials. It exposes no configuration.
+app.get('/healthz', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+// API authentication runs after the ingress rewrite above. The app shell and
+// static assets stay reachable so the app can show its own login form; that
+// form works in the Home Assistant Companion app, where the browser's native
+// HTTP Basic dialog is not available inside an ingress frame.
 app.use('/api', basicAuth);
 
 // Static files - serve public directory at root

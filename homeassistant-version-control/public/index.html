@@ -12,6 +12,7 @@
   <script src="js/diff.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
   <link rel="stylesheet" href="css/style.css?v=20261112_03">
+  <link rel="stylesheet" href="css/auth.css?v=2">
   <link rel="icon" type="image/x-icon" href="images/favicon.ico">
   <style>
     /* Suppress browser / WebKit credential and contact autofill icons */
@@ -988,6 +989,22 @@
     </button>
   </nav>
 
+  <!-- In-app sign in. Shown when the API returns 401, since Ingress on iOS
+       does not surface the browser's Basic auth dialog. -->
+  <div id="authOverlay" class="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="authTitle" hidden>
+    <form id="authForm" class="auth-card">
+      <h1 class="auth-title" id="authTitle">Sign in</h1>
+      <p class="auth-subtitle">Enter the API username and password for Home Assistant Version Control.</p>
+      <label class="auth-label" for="authUsername">Username</label>
+      <input class="auth-input" id="authUsername" name="username" type="text" value="havc" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next">
+      <label class="auth-label" for="authPassword">Password</label>
+      <input class="auth-input" id="authPassword" name="password" type="password" autocomplete="current-password" enterkeyhint="go">
+      <p class="auth-error" id="authError" role="alert"></p>
+      <button class="auth-submit" id="authSubmit" type="submit">Sign in</button>
+    </form>
+  </div>
+
+  <script src="auth.js?v=3"></script>
   <script src="app.js?v=20260901_1250"></script>
 </body>
 

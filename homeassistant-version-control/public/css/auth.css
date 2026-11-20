@@ -1,0 +1,231 @@
+/* === In-app sign in === */
+/* Shown when the API returns 401. Home Assistant Ingress runs in an iframe
+   on iOS, where the native HTTP Basic dialog never appears, so this replaces it. */
+
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  /* Soft accent glow over the scrim so the backdrop does not read as flat black */
+  background:
+    radial-gradient(circle at 50% 42%, rgba(59, 130, 246, 0.1), transparent 62%),
+    rgba(0, 0, 0, 0.72);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  animation: authOverlayIn 0.18s ease-out;
+}
+
+/* The hidden attribute must win over display: flex */
+.auth-overlay[hidden] {
+  display: none;
+}
+
+body.auth-locked {
+  overflow: hidden;
+}
+
+.auth-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 360px;
+  margin: auto;
+  padding: 24px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
+  text-align: left;
+  animation: authCardIn 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.auth-title {
+  margin: 0 0 6px;
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.auth-subtitle {
+  margin: 0 0 18px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.auth-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+}
+
+.auth-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 16px; /* 16px keeps iOS from zooming the field on focus */
+  line-height: 1.4;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.auth-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.auth-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-light, rgba(59, 130, 246, 0.15));
+}
+
+/* Keep autofilled fields inside the dark theme instead of a white block */
+.auth-input:-webkit-autofill,
+.auth-input:-webkit-autofill:hover,
+.auth-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text-primary);
+  -webkit-box-shadow: 0 0 0 1000px var(--bg-secondary) inset;
+  caret-color: var(--text-primary);
+}
+
+/* Autofill would otherwise hide the focus ring, so draw both shadows */
+.auth-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 3px var(--accent-light, rgba(59, 130, 246, 0.15)), 0 0 0 1000px var(--bg-secondary) inset;
+}
+
+.auth-error {
+  min-height: 18px;
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--danger, #ef4444);
+}
+
+.auth-submit {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 16px;
+  background: var(--accent-primary);
+  color: #ffffff;
+  border: 0;
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: background 0.2s ease, filter 0.2s ease, transform 0.1s ease;
+}
+
+.auth-submit:hover {
+  background: var(--accent-hover);
+}
+
+.auth-submit:active {
+  background: var(--accent-hover);
+  transform: scale(0.995);
+}
+
+.auth-submit:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.auth-submit:disabled {
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Light mode (body without dark-mode) needs a softer scrim */
+body:not(.dark-mode) .auth-overlay {
+  background:
+    radial-gradient(circle at 50% 42%, rgba(37, 99, 235, 0.08), transparent 62%),
+    rgba(15, 15, 15, 0.35);
+}
+
+body:not(.dark-mode) .auth-card {
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+@keyframes authOverlayIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes authCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Narrow phones (320px wide and below): keep the card inside the viewport */
+@media (max-width: 360px) {
+  .auth-card {
+    padding: 20px;
+  }
+}
+
+/* Short landscape or split view: tighten spacing so nothing gets cut off */
+@media (max-height: 520px) {
+  .auth-card {
+    padding: 20px;
+  }
+
+  .auth-subtitle {
+    margin-bottom: 12px;
+  }
+
+  .auth-input {
+    margin-bottom: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .auth-overlay,
+  .auth-card {
+    animation: none;
+  }
+
+  .auth-submit {
+    transition: none;
+  }
+}
